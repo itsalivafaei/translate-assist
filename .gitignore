@@ -1,0 +1,21 @@
+# Xcode
+DerivedData/
+build/
+*.xcuserstate
+*.xcscmblueprint
+
+# Swift Package Manager
+.build/
+.swiftpm/
+
+# macOS
+.DS_Store
+
+# Secrets
+translate assist/Secrets.plist
+
+# Logs
+*.log
+
+# Docs
+agent_docs/

@@ -67,4 +67,34 @@ public final class OrchestrationVM: ObservableObject {
     }
 }
 
+#if DEBUG
+extension OrchestrationVM {
+    public static func makePreview() -> OrchestrationVM {
+        let tp = FakeTranslationProvider()
+        let llm = FakeLLMEnhancer()
+        let ex = FakeExamplesProvider()
+        let gl = FakeGlossaryProvider()
+        let metrics = FakeMetricsProvider()
+        let svc = TranslationService(translationProvider: tp, llmEnhancer: llm, examplesProvider: ex, glossary: gl, metrics: metrics)
+        let vm = OrchestrationVM(service: svc)
+        // Populate sample state
+        vm.mtCandidates = [
+            SenseCandidate(text: "سلام دنیا", provenance: "fake-mt"),
+            SenseCandidate(text: "درود بر جهان", provenance: "fake-mt")
+        ]
+        vm.chosenText = "سلام دنیا"
+        vm.alternatives = ["درود بر جهان"]
+        vm.explanation = "Selected the most common translation."
+        vm.confidence = 0.86
+        vm.examples = [
+            Example(srcText: "Hello, world!", dstText: "سلام دنیا!", provenance: "tatoeba"),
+            Example(srcText: "A friendly greeting.", dstText: "یک سلام دوستانه.", provenance: "tatoeba")
+        ]
+        vm.banner = nil
+        vm.isTranslating = false
+        return vm
+    }
+}
+#endif
+
 

@@ -334,6 +334,10 @@ private struct MenubarPopoverView: View {
     @State private var isTranslating: Bool = false
     @State private var currentTask: Task<Void, Never>? = nil
     @State private var cancellables: Set<AnyCancellable> = []
+    // Phase 8: persona and domain controls
+    @State private var selectedPersona: PersonaPreset = .engineerRead
+    @State private var domainAI: Bool = true
+    @State private var domainBusiness: Bool = false
     private let translationService: TranslationService
     @ObservedObject private var vm: OrchestrationVM
 
@@ -362,6 +366,31 @@ private struct MenubarPopoverView: View {
                 .lineLimit(3...5)
                 .focused($focusInput)
                 .accessibilityLabel("Input text to translate")
+                .accessibilityHint("Enter text to translate into Persian")
+
+            // Persona & Domain controls
+            VStack(alignment: .leading, spacing: 8) {
+                Picker("Persona", selection: $selectedPersona) {
+                    ForEach(PersonaPreset.allCases, id: \.self) { p in
+                        Text(p.display).tag(p)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .controlSize(.small)
+                .accessibilityLabel("Persona preset")
+
+                HStack(spacing: 8) {
+                    Toggle(isOn: $domainAI) { Text("AI/CS") }
+                        .toggleStyle(.switch)
+                        .controlSize(.small)
+                        .accessibilityLabel("AI and Computer Science domain")
+                    Toggle(isOn: $domainBusiness) { Text("Business") }
+                        .toggleStyle(.switch)
+                        .controlSize(.small)
+                        .accessibilityLabel("Business domain")
+                }
+            }
+            Divider()
 
             HStack {
                 Button {
@@ -407,6 +436,8 @@ private struct MenubarPopoverView: View {
                             .padding(10)
                             .background(.thinMaterial)
                             .cornerRadius(8)
+                            .accessibilityLabel("Primary translation")
+                            .accessibilityHint("Confidence score shown next to the translation")
                         }
 
                         // Explanation
@@ -415,6 +446,7 @@ private struct MenubarPopoverView: View {
                                 .font(.footnote)
                                 .foregroundStyle(.secondary)
                         }
+                        Divider()
 
                         // Alternatives (collapsed)
                         if !vm.alternatives.isEmpty {
@@ -429,6 +461,7 @@ private struct MenubarPopoverView: View {
                                 }
                                 .padding(.top, 4)
                             }
+                            .accessibilityLabel("Alternative translations")
                         }
 
                         // Examples
@@ -452,6 +485,7 @@ private struct MenubarPopoverView: View {
                                     .cornerRadius(6)
                                 }
                             }
+                            .accessibilityLabel("Example sentences")
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -496,13 +530,23 @@ private struct MenubarPopoverView: View {
                 BannerCenter.shared.show(message: message)
             }
         }
+        .onChange(of: selectedPersona) { _, _ in rerunIfPossible() }
+        .onChange(of: domainAI) { _, _ in rerunIfPossible() }
+        .onChange(of: domainBusiness) { _, _ in rerunIfPossible() }
         .onExitCommand(perform: closePopover)
     }
 
     private func startTranslate() {
         let term = inputText
         guard !term.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-        vm.start(term: term, src: nil, dst: "fa", context: nil, persona: nil, domainPriority: ["AI/CS","Business"])
+        vm.start(
+            term: term,
+            src: nil,
+            dst: "fa",
+            context: nil,
+            persona: selectedPersona.personaString,
+            domainPriority: effectiveDomains()
+        )
     }
 
     private func prefillFromPasteboard() {
@@ -517,6 +561,21 @@ private struct MenubarPopoverView: View {
 
     private func closePopover() {
         NotificationCenter.default.post(name: .menubarPopoverRequestClose, object: nil)
+    }
+
+    private func rerunIfPossible() {
+        let term = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !term.isEmpty else { return }
+        vm.cancel()
+        startTranslate()
+    }
+
+    private func effectiveDomains() -> [String] {
+        var list: [String] = []
+        if domainAI { list.append("AI/CS") }
+        if domainBusiness { list.append("Business") }
+        if list.isEmpty { list = ["AI/CS", "Business"] }
+        return list
     }
 
     private func confidenceColor(_ value: Double) -> Color {
@@ -558,4 +617,27 @@ enum HotkeyOption: String, CaseIterable {
 
 extension Notification.Name {
     static let hotkeyPreferenceDidChange = Notification.Name("hotkey.preference.changed")
+}
+
+// MARK: - Persona presets for Phase 8 UI (adheres to Apple Human Interface Guidelines: clarity & consistency)
+private enum PersonaPreset: String, CaseIterable {
+    case engineerRead
+    case businessWrite
+    case casualLearn
+
+    var display: String {
+        switch self {
+        case .engineerRead: return "Engineer·Read"
+        case .businessWrite: return "Business·Write"
+        case .casualLearn: return "Casual·Learn"
+        }
+    }
+
+    var personaString: String {
+        switch self {
+        case .engineerRead: return "engineer_read"
+        case .businessWrite: return "business_write"
+        case .casualLearn: return "casual_learn"
+        }
+    }
 }

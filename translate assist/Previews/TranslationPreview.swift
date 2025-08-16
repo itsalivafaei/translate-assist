@@ -55,14 +55,37 @@ struct TranslationDrivenPreview: View {
     }
 }
 
-#Preview("VM‑driven · Light") {
-    TranslationDrivenPreview()
+// Phase 8: Add OrchestrationVM static preview alongside existing VM preview
+#Preview("OrchestrationVM · Light") {
+    VStack(alignment: .leading, spacing: 12) {
+        Text("Translate Assist").font(.headline)
+        let vm = OrchestrationVM.makePreview()
+        VStack(alignment: .leading, spacing: 8) {
+            Text(vm.chosenText).font(.title3).bold()
+            Text(vm.explanation).font(.footnote).foregroundStyle(.secondary)
+            if !vm.alternatives.isEmpty {
+                DisclosureGroup("Alternatives") { ForEach(vm.alternatives, id: \.self) { Text($0) } }
+            }
+        }
+        .padding(16)
+    }
 }
 
-#Preview("VM‑driven · RTL Dark") {
-    TranslationDrivenPreview()
-        .environment(\.layoutDirection, .rightToLeft)
-        .preferredColorScheme(.dark)
+#Preview("OrchestrationVM · RTL Dark") {
+    VStack(alignment: .leading, spacing: 12) {
+        Text("Translate Assist").font(.headline)
+        let vm = OrchestrationVM.makePreview()
+        VStack(alignment: .leading, spacing: 8) {
+            Text(vm.chosenText).font(.title3).bold()
+            Text(vm.explanation).font(.footnote).foregroundStyle(.secondary)
+            if !vm.alternatives.isEmpty {
+                DisclosureGroup("Alternatives") { ForEach(vm.alternatives, id: \.self) { Text($0) } }
+            }
+        }
+        .padding(16)
+    }
+    .environment(\.layoutDirection, .rightToLeft)
+    .preferredColorScheme(.dark)
 }
 
 

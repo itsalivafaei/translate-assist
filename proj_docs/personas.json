@@ -1,0 +1,30 @@
+[
+    {
+      "id": "engineer_read",
+      "name": "Engineer · Read",
+      "intent": "read",
+      "domains": ["AI/CS","Cloud"],
+      "proficiency": "C1",
+      "register": "neutral",
+      "quality": { "literalBias": 0.7, "thoroughness": 0.4, "contextChars": 400, "glossaryMode": "prefer" }
+    },
+    {
+      "id": "business_write",
+      "name": "Business · Write",
+      "intent": "write",
+      "domains": ["Business","Product"],
+      "proficiency": "C1",
+      "register": "formal",
+      "quality": { "literalBias": 0.4, "thoroughness": 0.6, "contextChars": 300, "glossaryMode": "enforce" }
+    },
+    {
+      "id": "casual_learn",
+      "name": "Casual Learner · Learn",
+      "intent": "learn",
+      "domains": ["General"],
+      "proficiency": "B1",
+      "register": "conversational",
+      "quality": { "literalBias": 0.5, "thoroughness": 0.7, "contextChars": 250, "glossaryMode": "prefer" }
+    }
+  ]
+  

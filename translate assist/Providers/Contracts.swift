@@ -143,4 +143,30 @@ public protocol MetricsProvider {
     func track(event: String, value: Double?)
 }
 
+#if DEBUG
+public enum GoldSetItem: String, CaseIterable {
+    case helloWorld = "Hello, world!"
+    case neuralNetwork = "neural network"
+    case machineLearning = "machine learning"
+    case businessPlan = "business plan"
+    case algorithm = "algorithm"
+    case artificialIntelligence = "artificial intelligence"
+    case deepLearning = "deep learning"
+    case dataset = "dataset"
+    case promptEngineering = "prompt engineering"
+    case transformer = "transformer"
+    case attentionMechanism = "attention mechanism"
+    case lossFunction = "loss function"
+    case optimization = "optimization"
+    case entrepreneurship = "entrepreneurship"
+    case revenueModel = "revenue model"
+    case stakeholder = "stakeholder"
+    case roadmap = "roadmap"
+    case featureRequest = "feature request"
+    case productRequirement = "product requirement"
+    case userStory = "user story"
+    case acceptanceCriteria = "acceptance criteria"
+}
+#endif
+
 

@@ -2,7 +2,7 @@
 
 ## 0) Overview
 
-A macOS 13+ menubar popover that delivers **EN/ES/ZH/HI/AR → FA** translations with **Google MT** plus **LLM (Groq/Perplexity) rerank/rewrite/explain**, persona‑aware outputs, a personal termbank with light SRS, examples, and TTS. Distribution is direct‑download (signed, notarized) with Sparkle. No OCR, no inline Replace, no onboarding; cloud is required in MVP.
+A macOS 13+ menubar popover that delivers **EN/ES/ZH/HI/AR → FA** translations with **Google MT** plus **LLM (Google AI Studio: Gemma/Gemini) rerank/rewrite/explain**, persona‑aware outputs, a personal termbank with light SRS, examples, and TTS. Distribution is direct‑download (signed, notarized) with Sparkle. No OCR, no inline Replace, no onboarding; cloud is required in MVP.
 
 ## 1) User stories & acceptance criteria
 
@@ -65,7 +65,7 @@ A macOS 13+ menubar popover that delivers **EN/ES/ZH/HI/AR → FA** translations
 - **UI layer**: SwiftUI views inside an AppKit `NSPopover` driven by `NSStatusItem`.
 - **View models**: `PopoverVM`, `TranslationVM`, `TermbankVM` using async/await.
 - **Services**: `TranslationService`, `LLMEnhancerService`, `ExamplesService`, `PronunciationService`, `CacheService`, `CSVExportService`.
-- **Providers** (adapters): `GoogleTranslationProvider`, `GroqLLMProvider` or `PerplexityLLMProvider`, `WiktionaryProvider`, `TatoebaProvider`.
+- **Providers** (adapters): `GoogleTranslationProvider`, `GemmaLLMProvider` or `GeminiLLMProvider` (Google AI Studio), `WiktionaryProvider`, `TatoebaProvider`.
 - **Storage**: Core Data (Termbank); SQLite (GRDB) for caches.
 - **Updates**: Sparkle.
 
@@ -197,7 +197,7 @@ explain(input: ExplainInput) -> ExplainOutput
 
 ## 16) Open questions
 
-- Groq vs Perplexity default model for rerank/rewrite? (Pick based on latency in your region.)
+- Gemma vs Gemini default model for rerank/rewrite? (Pick based on latency/quality in your region.)
 - Budget for monthly API usage during beta (set cap & in‑app warning)?
 - Extend domains beyond AI/CS & Business before v0.2?
 

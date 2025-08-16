@@ -60,6 +60,16 @@ public enum PromptFactory {
         """
         return prompt
     }
+
+    // Test-only: Validate a decision JSON string against our DTO
+    #if DEBUG
+    public static func _decodeDecision(from jsonText: String) throws -> LLMDecision {
+        let data = Data(jsonText.utf8)
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        return try decoder.decode(LLMDecision.self, from: data)
+    }
+    #endif
 }
 
 

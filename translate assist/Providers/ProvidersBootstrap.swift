@@ -47,7 +47,7 @@ public enum ProvidersBootstrap {
     }
 
     public static func makeMetricsProvider() -> MetricsProvider {
-        return FakeMetricsProvider()
+        return DBMetricsProvider()
     }
 }
 

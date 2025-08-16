@@ -176,6 +176,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NotificationCenter.default.addObserver(forName: .openAboutRequested, object: nil, queue: .main) { [weak self] _ in
             self?.openAbout()
         }
+
+        // UI Tests hook: auto-open popover on launch when requested
+        if ProcessInfo.processInfo.arguments.contains("-UITestOpenPopover") {
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 150_000_000)
+                self.togglePopover(nil)
+            }
+        }
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -206,7 +214,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func configurePopover() {
-        popover.behavior = .transient
+        // Default transient behavior; keep pinned/open for UI automation
+        if ProcessInfo.processInfo.arguments.contains("-UITestOpenPopover") {
+            popover.behavior = .applicationDefined
+            popover.animates = false
+        } else {
+            popover.behavior = .transient
+        }
         popover.contentSize = NSSize(width: Constants.popoverWidth, height: Constants.popoverHeight)
         popover.contentViewController = NSHostingController(rootView: MenubarPopoverView(translationService: translationService, orchestrationVM: orchestrationVM, termbank: termbank, srs: srs))
         popover.delegate = self
@@ -221,6 +235,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if popover.isShown {
             popover.performClose(sender)
         } else {
+            // In UI tests, keep our app foreground to reduce accidental popover closes
+            if ProcessInfo.processInfo.arguments.contains("-UITestOpenPopover") {
+                NSApp.activate(ignoringOtherApps: true)
+            }
             popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
             popover.contentViewController?.view.window?.becomeKey()
             // Focus input when opening

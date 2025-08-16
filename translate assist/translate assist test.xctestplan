@@ -18,6 +18,13 @@
         "identifier" : "4115C0A32E4A000000B267AD",
         "name" : "translate assistTests"
       }
+    },
+    {
+      "target" : {
+        "containerPath" : "container:translate assist.xcodeproj",
+        "identifier" : "41F32F332E50FC8200862A72",
+        "name" : "translate assistUITests"
+      }
     }
   ],
   "version" : 1

@@ -231,7 +231,7 @@ graph TD
 - Gold set: 100 items (AI/CS 50, Business 50); log wins/losses MT-only vs MT+LLM; P50/P95 latencies.
 - Acceptance: tests green; ≥80% “Right meaning”; budgets met.
 
-#### Phase 12 — Packaging & distribution
+#### Phase 12 — Packaging & distribution ✅
 - Assets, light/dark + RTL previews; About with attributions (Wiktionary/Tatoeba).
 - Signed and notarized DMG distribution; no Sparkle in MVP.
 - Acceptance: notarization OK; DMG installs on a second machine.

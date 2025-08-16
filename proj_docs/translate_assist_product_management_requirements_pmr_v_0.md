@@ -7,7 +7,7 @@ A macOS menubar popover that gives **context‑aware EN/ES/ZH/HI/AR → Persian*
 - **Context‑switching** to web translators breaks flow.
 - **Domain ambiguity** (AI/CS, Business) makes generic MT wrong or awkward in Persian.
 - **macOS UX gap:** Lookup shows definitions, not domain‑aware translations.
-- **LLMs are fast/cheap enough** (Groq/Perplexity) to rerank senses and polish tone in real time.
+- **LLMs are fast/cheap enough** (Google AI Studio: Gemma/Gemini) to rerank senses and polish tone in real time.
 
 ## 3) Target users & intents
 Primary:
@@ -32,7 +32,7 @@ Secondary:
 **Included**
 - Trigger via macOS **Services** or menubar/hotkey.
 - If no selection, show **input textbox** in popover.
-- **Google Translation API** for MT; **Groq/Perplexity LLM** for rerank, rewrite, explain.
+- **Google Translation API** for MT; **Google AI Studio LLM (Gemma/Gemini)** for rerank, rewrite, explain.
 - Languages: auto‑detect top‑5 sources (EN/ES/ZH/HI/AR) → **Persian only** target.
 - UI: Lookup‑inspired popover (own visual style): header (term·IPA·POS·audio), primary translation card, alternatives (expand), domain chips, micro‑toggles, Save.
 - **Termbank + SRS (light)**; CSV/Anki export.
@@ -85,7 +85,7 @@ Secondary:
 
 ## 13) Dependencies
 - macOS 13+, Xcode 15+, Developer ID & notarization, Sparkle.
-- Google Cloud Translation key; Groq or Perplexity key.
+- Google Cloud Translation key; Google AI Studio key (Gemini/Gemma).
 - Data sources: Wiktionary/Tatoeba dumps or APIs.
 
 ## 14) Roadmap (high level)
@@ -97,5 +97,5 @@ Secondary:
 ## 15) Assumptions
 - Users accept cloud processing in MVP.
 - Persian target is the highest leverage for initial audience.
-- LLMs (Groq/Perplexity) can meet ≤400ms rerank/rewrite at typical prompt sizes.
+- LLMs (Google AI Studio: Gemma/Gemini) can meet ≤400ms rerank/rewrite at typical prompt sizes.
 

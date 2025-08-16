@@ -128,6 +128,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.servicesProvider = ServicesProvider.shared
         NSUpdateDynamicServices()
         DatabaseManager.shared.start()
+        // Start reachability monitoring for proactive Offline banners
+        NetworkReachability.shared.start()
         // Phase 4: opportunistic cache maintenance on launch
         try? CacheService.pruneIfOversized(maxEntriesPerTable: 10_000)
         // Also schedule periodic cleanup on app activation events
@@ -164,6 +166,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if let hk = hotKeyRefCtrlT { UnregisterEventHotKey(hk) }
         if let hk = hotKeyRefCtrlShiftT { UnregisterEventHotKey(hk) }
         if let handler = hotKeyHandler { RemoveEventHandler(handler) }
+        NetworkReachability.shared.stop()
     }
 
     private func configureStatusItem() {
@@ -499,6 +502,13 @@ private struct MenubarPopoverView: View {
                 .accessibilityLabel("Input text to translate")
                 .accessibilityHint("Enter text to translate into Persian")
 
+            // Offline/banner area
+            if !NetworkReachability.shared.isOnline {
+                Text("Offline — showing cache when possible")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             // Persona & Domain controls
             VStack(alignment: .leading, spacing: 8) {
                 Picker("Persona", selection: $selectedPersona) {
@@ -546,6 +556,14 @@ private struct MenubarPopoverView: View {
                     }
                     .controlSize(.small)
                     .accessibilityLabel("Retry translation")
+                }
+
+                if !NetworkReachability.shared.isOnline {
+                    Button("Try MT Cache") {
+                        rerunIfPossible()
+                    }
+                    .controlSize(.small)
+                    .accessibilityLabel("Try using cached MT")
                 }
 
                 Button("Save") { saveCurrentToTermbank() }
@@ -682,6 +700,15 @@ private struct MenubarPopoverView: View {
         .onReceive(NotificationCenter.default.publisher(for: .menubarShowBanner)) { output in
             if let message = output.object as? String {
                 BannerCenter.shared.show(message: message)
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .networkReachabilityChanged)) { output in
+            if let online = output.object as? Bool {
+                if !online {
+                    BannerCenter.shared.show(message: AppDomainError.offline.bannerMessage)
+                } else {
+                    BannerCenter.shared.show(message: "Back online")
+                }
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .menubarServicePayload)) { output in

@@ -6,6 +6,16 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXContainerItemProxy section */
+		4115C0A92E4A000000B267AD /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 4115BE0B2E49DF8600B267AD /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 4115BE122E49DF8600B267AD;
+			remoteInfo = "translate assist";
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
 		4115BE132E49DF8600B267AD /* translate assist.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "translate assist.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		4115C0A12E4A000000B267AD /* translate assistTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "translate assistTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -17,7 +27,7 @@
 			path = "translate assist";
 			sourceTree = "<group>";
 		};
-		4115C0A22E4A000000B267AD /* Tests */ = {
+		4115C0A22E4A000000B267AD /* translate assist/Tests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = "translate assist/Tests";
 			sourceTree = "<group>";
@@ -47,7 +57,7 @@
 			children = (
 				4115BE152E49DF8600B267AD /* translate assist */,
 				4115BE142E49DF8600B267AD /* Products */,
-				4115C0A22E4A000000B267AD /* Tests */,
+				4115C0A22E4A000000B267AD /* translate assist/Tests */,
 			);
 			sourceTree = "<group>";
 		};
@@ -99,7 +109,7 @@
 				4115C0AA2E4A000000B267AD /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
-				4115C0A22E4A000000B267AD /* Tests */,
+				4115C0A22E4A000000B267AD /* translate assist/Tests */,
 			);
 			name = "translate assistTests";
 			productName = "translate assistTests";
@@ -178,18 +188,12 @@
 		};
 /* End PBXSourcesBuildPhase section */
 
-/* Begin PBXContainerItemProxy section */
-		4115C0A92E4A000000B267AD /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 4115BE0B2E49DF8600B267AD /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = 4115BE122E49DF8600B267AD;
-			remoteInfo = "translate assist";
-		};
-/* End PBXContainerItemProxy section */
-
 /* Begin PBXTargetDependency section */
-		4115C0AA2E4A000000B267AD /* PBXTargetDependency */ = {isa = PBXTargetDependency; target = 4115BE122E49DF8600B267AD /* translate assist */; targetProxy = 4115C0A92E4A000000B267AD /* PBXContainerItemProxy */; };
+		4115C0AA2E4A000000B267AD /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 4115BE122E49DF8600B267AD /* translate assist */;
+			targetProxy = 4115C0A92E4A000000B267AD /* PBXContainerItemProxy */;
+		};
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */

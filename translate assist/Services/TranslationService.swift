@@ -93,6 +93,22 @@ public final class TranslationService {
                         glossaryHits: hits
                     )
 
+                    // Proactive offline handling: skip LLM when offline and finalize using MT only
+                    if !NetworkReachability.shared.isOnline {
+                        continuation.yield(.banner(AppDomainError.offline.bannerMessage))
+                        let offlineOutcome = self.makeOutcome(term: trimmed, src: effectiveSrc, dst: dst, context: context, mt: mt, decision: nil)
+                        continuation.yield(.final(offlineOutcome))
+                        metrics.track(event: "llm_skipped_offline", value: nil)
+                        Task.detached {
+                            let exSpan = self.signposter.beginInterval("stage.examples", id: .exclusive)
+                            let examples = (try? await self.examplesProvider.search(term: trimmed, src: effectiveSrc, dst: dst, context: context)) ?? []
+                            continuation.yield(.examples(examples))
+                            self.signposter.endInterval("stage.examples", exSpan)
+                            continuation.finish()
+                        }
+                        return
+                    }
+
                     // Primary decision
                     let decisionSpan = signposter.beginInterval("stage.llm", id: .exclusive)
                     var decision: LLMDecision

@@ -33,6 +33,7 @@ public final class RateLimitScheduler: @unchecked Sendable {
     private let logger = Logger(subsystem: "com.klewrsolutions.translate-assist", category: "scheduler")
     private var buckets: [ProviderKind: Bucket]
     private let queue = DispatchQueue(label: "com.translateassist.scheduler", qos: .userInitiated)
+    private let defaults = UserDefaults.standard
 
     private init() {
         let now = Date().timeIntervalSince1970
@@ -65,6 +66,22 @@ public final class RateLimitScheduler: @unchecked Sendable {
                 lastRefill: now, circuitOpenUntil: 0, consecutiveFailures: 0
             )
         ]
+        // Restore persisted circuit-open timestamps if any
+        for provider in ProviderKind.allCases {
+            if var b = buckets[provider] {
+                let key = self.persistKey(for: provider)
+                if let until = defaults.object(forKey: key) as? Double {
+                    let now = Date().timeIntervalSince1970
+                    if until > now {
+                        b.circuitOpenUntil = until
+                    } else {
+                        defaults.removeObject(forKey: key)
+                        b.circuitOpenUntil = 0
+                    }
+                    buckets[provider] = b
+                }
+            }
+        }
     }
 
     public func schedule<T>(provider: ProviderKind, costTokens: Int, operation: @escaping () async throws -> T) async throws -> T {
@@ -156,6 +173,9 @@ public final class RateLimitScheduler: @unchecked Sendable {
                     self.buckets[provider] = b
                 }
             }
+            // Persist circuit until to survive short restarts
+            let until = queue.sync { self.buckets[provider]?.circuitOpenUntil ?? 0 }
+            defaults.set(until, forKey: persistKey(for: provider))
             logger.error("Circuit opened for \(provider.rawValue) cooldown_s=\(cooldown, privacy: .public) rl_requests=\(hints.remainingRequests ?? -1)/\(hints.limitRequests ?? -1) rl_tokens=\(hints.remainingTokens ?? -1)/\(hints.limitTokens ?? -1)")
         }
     }
@@ -164,9 +184,11 @@ public final class RateLimitScheduler: @unchecked Sendable {
         queue.sync {
             if var b = self.buckets[provider] {
                 b.consecutiveFailures = 0
+                b.circuitOpenUntil = 0
                 self.buckets[provider] = b
             }
         }
+        defaults.removeObject(forKey: persistKey(for: provider))
     }
 
     private func registerFailure(provider: ProviderKind) {
@@ -176,6 +198,10 @@ public final class RateLimitScheduler: @unchecked Sendable {
                 self.buckets[provider] = b
             }
         }
+    }
+
+    private func persistKey(for provider: ProviderKind) -> String {
+        return "rl_circuit_until_\(provider.rawValue)"
     }
 }
 

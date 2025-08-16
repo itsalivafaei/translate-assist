@@ -220,7 +220,7 @@ graph TD
 - CSV/JSONL export with headers.
 - Acceptance: save ≤50ms; review shows items; export valid UTF‑8.
 
-#### Phase 10 — Resilience & offline
+#### Phase 10 — Resilience & offline ✅
 - Distinct banners: offline, provider busy/rate-limited, JSON invalid → MT-only.
 - Retry button; auto-recover after cooldown or when headers show capacity.
 - Acceptance: chaos tests (429/503, timeouts) degrade gracefully; no crashes.

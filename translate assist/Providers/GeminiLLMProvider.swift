@@ -29,7 +29,12 @@ public final class GeminiLLMProvider: LLMEnhancer {
 
         let system = PromptFactory.decisionPrompt(input: input)
         let body: [String: Any] = [
+            "generationConfig": [
+                "temperature": 0.2,
+                "responseMimeType": "application/json"
+            ],
             "contents": [[
+                "role": "user",
                 "parts": [["text": system]]
             ]]
         ]
@@ -56,7 +61,14 @@ public final class GeminiLLMProvider: LLMEnhancer {
         // Attempt compact repair once
         let repairPrompt = PromptFactory.repairPrompt(from: text)
         let repairBody: [String: Any] = [
-            "contents": [["parts": [["text": repairPrompt]]]]
+            "generationConfig": [
+                "temperature": 0.0,
+                "responseMimeType": "application/json"
+            ],
+            "contents": [[
+                "role": "user",
+                "parts": [["text": repairPrompt]]
+            ]]
         ]
         req.httpBody = try JSONSerialization.data(withJSONObject: repairBody, options: [])
         let repairedResp = try await NetworkClient.shared.send(req)

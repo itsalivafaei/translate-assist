@@ -9,26 +9,61 @@ import SwiftUI
 import AppKit
 import Foundation
 import SQLite3
+import OSLog
+import Carbon.HIToolbox
+import Combine
 
 @main
 struct translate_assistApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
     var body: some Scene {
-        // Keep the app windowless for a pure menubar experience in Phase 0.
+        // Keep the app windowless; use Settings for hotkey configuration.
         Settings {
-            EmptyView()
+            SettingsView()
         }
     }
 }
+// MARK: - SwiftUI Settings
+private struct SettingsView: View {
+    @State private var selection: HotkeyOption = HotkeyOption.current()
 
+    var body: some View {
+        Form {
+            Picker("Global Hotkey", selection: $selection) {
+                ForEach(HotkeyOption.allCases, id: \.self) { opt in
+                    Text(opt.displayLabel).tag(opt)
+                }
+            }
+            .onChange(of: selection) { _, newValue in
+                UserDefaults.standard.set(newValue.rawValue, forKey: HotkeyOption.userDefaultsKey)
+                NotificationCenter.default.post(name: .hotkeyPreferenceDidChange, object: nil)
+            }
+        }
+        .padding(20)
+        .frame(width: 360)
+        .onAppear { selection = HotkeyOption.current() }
+    }
+}
+
+@MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem?
     private let popover = NSPopover()
+    private let logger = Logger(subsystem: "com.klewrsolutions.translate-assist", category: "menubar")
+
+    // Global hotkey state
+    private var hotKeyRefCtrlT: EventHotKeyRef?
+    private var hotKeyRefCtrlShiftT: EventHotKeyRef?
+    private var hotKeyHandler: EventHandlerRef?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         configureStatusItem()
         configurePopover()
+        registerGlobalHotkeys()
+        // Register Services provider (requires NSServices in Info.plist)
+        NSApp.servicesProvider = ServicesProvider.shared
+        NSUpdateDynamicServices()
         DatabaseManager.shared.start()
         // Phase 4: opportunistic cache maintenance on launch
         try? CacheService.pruneIfOversized(maxEntriesPerTable: 10_000)
@@ -42,6 +77,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             try? CacheService.evictExpired()
             try? CacheService.pruneIfOversized(maxEntriesPerTable: 10_000)
         }
+
+        // Observe hotkey preference changes to re-register
+        NotificationCenter.default.addObserver(forName: .hotkeyPreferenceDidChange, object: nil, queue: .main) { [weak self] _ in
+            self?.registerGlobalHotkeys()
+        }
+
+        // Close popover when requested by SwiftUI view (Esc)
+        NotificationCenter.default.addObserver(forName: .menubarPopoverRequestClose, object: nil, queue: .main) { [weak self] _ in
+            self?.popover.performClose(nil)
+        }
+
+        // Service trigger → open popover with incoming text
+        NotificationCenter.default.addObserver(forName: .menubarServiceTrigger, object: nil, queue: .main) { [weak self] note in
+            guard let strongSelf = self else { return }
+            let incoming = note.object as? String ?? ""
+            strongSelf.openPopoverAndEmitPayload(incoming)
+        }
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        // Unregister hotkeys and handler
+        if let hk = hotKeyRefCtrlT { UnregisterEventHotKey(hk) }
+        if let hk = hotKeyRefCtrlShiftT { UnregisterEventHotKey(hk) }
+        if let handler = hotKeyHandler { RemoveEventHandler(handler) }
     }
 
     private func configureStatusItem() {
@@ -58,43 +117,345 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             button.target = self
             button.action = #selector(togglePopover(_:))
+            button.setAccessibilityLabel("Translate Assist")
+            button.sendAction(on: [.leftMouseUp, .rightMouseUp])
         }
     }
 
     private func configurePopover() {
         popover.behavior = .transient
         popover.contentSize = NSSize(width: Constants.popoverWidth, height: Constants.popoverHeight)
-        popover.contentViewController = NSHostingController(rootView: PopoverRootView())
+        popover.contentViewController = NSHostingController(rootView: MenubarPopoverView())
+        popover.delegate = self
     }
 
     @objc private func togglePopover(_ sender: Any?) {
         guard let button = statusItem?.button else { return }
+        if let event = NSApp.currentEvent, event.type == .rightMouseUp || event.modifierFlags.contains(.option) {
+            showStatusMenu(anchor: button, event: event)
+            return
+        }
         if popover.isShown {
             popover.performClose(sender)
         } else {
             popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
             popover.contentViewController?.view.window?.becomeKey()
+            // Focus input when opening
+            NotificationCenter.default.post(name: .menubarPopoverDidOpen, object: nil)
+            NotificationCenter.default.post(name: .menubarPopoverShouldFocusInput, object: nil)
+        }
+    }
+
+    private func showStatusMenu(anchor: NSView, event: NSEvent) {
+        let menu = NSMenu()
+        let prefs = NSMenuItem(title: "Preferences…", action: #selector(openPreferences), keyEquivalent: ",")
+        prefs.target = self
+        menu.addItem(prefs)
+
+        let about = NSMenuItem(title: "About Translate Assist", action: #selector(openAbout), keyEquivalent: "")
+        about.target = self
+        menu.addItem(about)
+
+        menu.addItem(NSMenuItem.separator())
+
+        let quit = NSMenuItem(title: "Quit", action: #selector(quitApp), keyEquivalent: "q")
+        quit.target = self
+        menu.addItem(quit)
+
+        NSMenu.popUpContextMenu(menu, with: event, for: anchor)
+    }
+
+    private func openPopoverAndEmitPayload(_ text: String) {
+        guard let button = statusItem?.button else { return }
+        if !popover.isShown {
+            popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+            popover.contentViewController?.view.window?.becomeKey()
+        }
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 50_000_000)
+            NotificationCenter.default.post(name: .menubarServicePayload, object: text)
+            NotificationCenter.default.post(name: .menubarPopoverShouldFocusInput, object: nil)
+        }
+    }
+
+    @objc private func openPreferences() {
+        NSApp.sendAction(Selector(("showPreferencesWindow:")), to: nil, from: nil)
+    }
+
+    @objc private func openAbout() {
+        NSApp.orderFrontStandardAboutPanel(nil)
+    }
+
+    @objc private func quitApp() {
+        NSApp.terminate(nil)
+    }
+
+    // MARK: - Global hotkeys (Ctrl+T, Ctrl+Shift+T)
+
+    private func registerGlobalHotkeys() {
+        // Unregister existing first
+        if let hk = hotKeyRefCtrlT { UnregisterEventHotKey(hk); hotKeyRefCtrlT = nil }
+        if let hk = hotKeyRefCtrlShiftT { UnregisterEventHotKey(hk); hotKeyRefCtrlShiftT = nil }
+
+        var eventType = EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed))
+        let userData = UnsafeMutableRawPointer(Unmanaged.passUnretained(self).toOpaque())
+        let status = InstallEventHandler(GetApplicationEventTarget(), { (_, eventRef, userData) -> OSStatus in
+            guard let userData = userData, let eventRef = eventRef else { return noErr }
+            let delegate = Unmanaged<AppDelegate>.fromOpaque(userData).takeUnretainedValue()
+            Task { @MainActor in
+                delegate.handleHotKeyEvent(eventRef)
+            }
+            return noErr
+        }, 1, &eventType, userData, &hotKeyHandler)
+        if status != noErr {
+            logger.error("Failed to install hotkey handler: status=\(status)")
+            NotificationCenter.default.post(name: .menubarShowBanner, object: "Hotkey handler failed to install. Shortcuts may not work.")
+        }
+
+        let ctrl: UInt32 = UInt32(controlKey)
+        let shift: UInt32 = UInt32(shiftKey)
+        let tKeyCode: UInt32 = 17 // 'T' on US keyboard
+
+        let option = HotkeyOption.current()
+        switch option {
+        case .ctrlT:
+            let id = EventHotKeyID(signature: OSType(1), id: 1)
+            let s = RegisterEventHotKey(tKeyCode, ctrl, id, GetApplicationEventTarget(), 0, &hotKeyRefCtrlT)
+            if s != noErr {
+                logger.error("Failed to register Ctrl+T hotkey: status=\(s)")
+                NotificationCenter.default.post(name: .menubarShowBanner, object: "Could not register Ctrl+T. Try Ctrl+Shift+T or change in Preferences.")
+            }
+        case .ctrlShiftT:
+            let id = EventHotKeyID(signature: OSType(1), id: 2)
+            let s = RegisterEventHotKey(tKeyCode, ctrl | shift, id, GetApplicationEventTarget(), 0, &hotKeyRefCtrlShiftT)
+            if s != noErr {
+                logger.error("Failed to register Ctrl+Shift+T hotkey: status=\(s)")
+                NotificationCenter.default.post(name: .menubarShowBanner, object: "Could not register Ctrl+Shift+T. Try Ctrl+T or change in Preferences.")
+            }
+        }
+    }
+
+    private func handleHotKeyEvent(_ event: EventRef) {
+        var hotKeyID = EventHotKeyID()
+        let status = GetEventParameter(event, EventParamName(kEventParamDirectObject), EventParamType(typeEventHotKeyID), nil, MemoryLayout<EventHotKeyID>.size, nil, &hotKeyID)
+        guard status == noErr else { return }
+        switch hotKeyID.id {
+        case 1, 2:
+            logger.debug("Global hotkey pressed id=\(hotKeyID.id)")
+            togglePopover(nil)
+        default:
+            break
         }
     }
 }
 
-// Minimal placeholder root view for the popover in Phase 0
-private struct PopoverRootView: View {
+// MARK: - Notifications used to coordinate focus and cancellation between AppKit and SwiftUI
+extension Notification.Name {
+    static let menubarPopoverWillClose = Notification.Name("menubar.popover.willClose")
+    static let menubarPopoverDidOpen = Notification.Name("menubar.popover.didOpen")
+    static let menubarPopoverShouldFocusInput = Notification.Name("menubar.popover.focusInput")
+    static let menubarShowBanner = Notification.Name("menubar.popover.showBanner")
+    static let menubarPopoverRequestClose = Notification.Name("menubar.popover.requestClose")
+    static let menubarServicePayload = Notification.Name("menubar.servicePayload")
+    static let menubarServiceTrigger = Notification.Name("menubar.serviceTrigger")
+}
+
+// MARK: - NSPopoverDelegate
+extension AppDelegate: NSPopoverDelegate {
+    func popoverWillClose(_ notification: Notification) {
+        // Broadcast so views can cancel any in-flight operations immediately
+        NotificationCenter.default.post(name: .menubarPopoverWillClose, object: nil)
+    }
+}
+
+// MARK: - Services provider to receive selected text
+@objc final class ServicesProvider: NSObject {
+    static let shared = ServicesProvider()
+
+    // This selector name should be referenced by NSServices in Info.plist to show in Services menu
+    // Signature per Cocoa Services: pasteboard, userData, error
+    @objc func translateAssistService(_ pboard: NSPasteboard, userData: String?, error: NSErrorPointer) {
+        if let str = pboard.string(forType: .string) {
+            NotificationCenter.default.post(name: .menubarServiceTrigger, object: str)
+        }
+    }
+}
+
+// MARK: - Lightweight banner center for transient notices
+final class BannerCenter: ObservableObject {
+    static let shared = BannerCenter()
+    @Published private var message: String? = nil
+    private var hideTask: Task<Void, Never>?
+
+    func show(message: String, autoHideSeconds: Double = 3.0) {
+        self.message = message
+        hideTask?.cancel()
+        hideTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(autoHideSeconds * 1_000_000_000))
+            await MainActor.run { self?.message = nil }
+        }
+    }
+
+    @ViewBuilder
+    func view() -> some View {
+        if let message = message, !message.isEmpty {
+            Text(message)
+                .font(.caption)
+                .padding(6)
+                .background(.thinMaterial)
+                .cornerRadius(6)
+                .transition(.opacity)
+                .zIndex(1)
+        }
+    }
+}
+
+// MARK: - SwiftUI popover root view for Phase 7 shell
+private struct MenubarPopoverView: View {
+    @State private var inputText: String = ""
+    @FocusState private var focusInput: Bool
+    @State private var isTranslating: Bool = false
+    @State private var currentTask: Task<Void, Never>? = nil
+    @State private var cancellables: Set<AnyCancellable> = []
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack {
+            HStack(spacing: 8) {
                 Image(systemName: "globe")
                     .imageScale(.large)
+                    .accessibilityHidden(true)
                 Text("Translate Assist")
                     .font(.headline)
+                    .accessibilityLabel("Translate Assist header")
                 Spacer()
             }
-            Text("Phase 0: Bootstrap complete. Menu bar active; popover ready.")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
+            .overlay(alignment: .topTrailing) {
+                BannerCenter.shared.view()
+            }
+
+            TextField("Paste or type text…", text: $inputText, axis: .vertical)
+                .textFieldStyle(.roundedBorder)
+                .lineLimit(3...5)
+                .focused($focusInput)
+                .accessibilityLabel("Input text to translate")
+
+            HStack {
+                Button {
+                    startTranslate()
+                } label: {
+                    if isTranslating {
+                        ProgressView().controlSize(.small)
+                            .accessibilityLabel("Translating…")
+                    } else {
+                        Text("Translate")
+                    }
+                }
+                .disabled(inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isTranslating)
+                .keyboardShortcut(.return, modifiers: [])
+                .accessibilityLabel("Translate button")
+
+                Spacer()
+
+                Button("Clear") { inputText.removeAll() }
+                    .disabled(inputText.isEmpty)
+            }
+
             Spacer()
+
+            Text("Hotkey: \(HotkeyOption.current().displayLabel)")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .accessibilityLabel("Hotkey: \(HotkeyOption.current().accessibilityLabel)")
         }
         .padding(16)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .frame(width: Constants.popoverWidth, height: Constants.popoverHeight)
+        .onAppear(perform: prefillFromPasteboard)
+        .onReceive(NotificationCenter.default.publisher(for: .menubarPopoverShouldFocusInput)) { _ in
+            focusInput = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .menubarPopoverWillClose)) { _ in
+            currentTask?.cancel()
+            currentTask = nil
+            isTranslating = false
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .menubarShowBanner)) { output in
+            if let message = output.object as? String {
+                BannerCenter.shared.show(message: message)
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .menubarServicePayload)) { output in
+            if let incoming = output.object as? String, inputText.isEmpty {
+                inputText = incoming
+                focusInput = true
+            }
+        }
+        .onAppear {
+            // Auto-focus on appear for keyboard-driven openings
+            DispatchQueue.main.async { focusInput = true }
+        }
+        .onExitCommand(perform: closePopover)
     }
+
+    private func startTranslate() {
+        isTranslating = true
+        // Phase 7 shell: simulate work and cancellation; real pipeline is Phase 6
+        currentTask?.cancel()
+        currentTask = Task {
+            do {
+                try await Task.sleep(nanoseconds: 300_000_000) // 300ms simulate MT
+                try Task.checkCancellation()
+                try await Task.sleep(nanoseconds: 300_000_000) // 300ms simulate LLM
+            } catch { /* cancelled */ }
+            if !Task.isCancelled {
+                isTranslating = false
+            }
+        }
+    }
+
+    private func prefillFromPasteboard() {
+        let pb = NSPasteboard.general
+        if let str = pb.string(forType: .string), !str.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            // Only prefill if user has not typed anything in the current session
+            if inputText.isEmpty {
+                inputText = str.trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+        }
+    }
+
+    private func closePopover() {
+        NotificationCenter.default.post(name: .menubarPopoverRequestClose, object: nil)
+    }
+}
+
+// MARK: - Hotkey options and notifications
+enum HotkeyOption: String, CaseIterable {
+    case ctrlT
+    case ctrlShiftT
+
+    static let userDefaultsKey = "hotkey_option"
+
+    static func current() -> HotkeyOption {
+        if let raw = UserDefaults.standard.string(forKey: userDefaultsKey), let opt = HotkeyOption(rawValue: raw) {
+            return opt
+        }
+        return .ctrlT
+    }
+
+    var displayLabel: String {
+        switch self {
+        case .ctrlT: return "Ctrl+T"
+        case .ctrlShiftT: return "Ctrl+Shift+T"
+        }
+    }
+
+    var accessibilityLabel: String {
+        switch self {
+        case .ctrlT: return "Control T"
+        case .ctrlShiftT: return "Control Shift T"
+        }
+    }
+}
+
+extension Notification.Name {
+    static let hotkeyPreferenceDidChange = Notification.Name("hotkey.preference.changed")
 }

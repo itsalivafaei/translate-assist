@@ -44,7 +44,10 @@ public final class GoogleTranslationProvider: TranslationProvider {
         // Parse response
         struct GTResponse: Decodable {
             struct DataField: Decodable {
-                struct Item: Decodable { let translatedText: String }
+                struct Item: Decodable {
+                    let translatedText: String
+                    let detectedSourceLanguage: String?
+                }
                 let translations: [Item]
             }
             let data: DataField
@@ -53,8 +56,8 @@ public final class GoogleTranslationProvider: TranslationProvider {
         let decoded = try JSONDecoder().decode(GTResponse.self, from: response.data)
         let texts = decoded.data.translations.map { $0.translatedText }
         let candidates = texts.map { SenseCandidate(text: $0, provenance: "google") }
-        // Note: Google may return detected language in alternate endpoints; we keep provided src or default
-        let detected = src // keep as-is for now; optionally add detect endpoint later
+        // Prefer detected source from response when caller didn't provide one
+        let detected = src ?? decoded.data.translations.first?.detectedSourceLanguage
         let usage = QuotaInfo(rpm: ProviderRateLimits.googleTranslate.rpm, tpm: ProviderRateLimits.googleTranslate.tpm, rpd: ProviderRateLimits.googleTranslate.rpd)
         return MTResponse(candidates: candidates, detectedSrc: detected, usage: usage)
     }

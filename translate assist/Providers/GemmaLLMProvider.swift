@@ -2,48 +2,75 @@
 //  GemmaLLMProvider.swift
 //  translate assist
 //
-//  Phase 5: Gemma 3 adapter (placeholder: same API shape as Gemini for now).
-//  This can be pointed to Groq or Google endpoints depending on availability.
+//  Phase 5: Gemma 3 adapter via Google Generative Language API (generateContent)
+//  using GEMINI_API_KEY for auth and GEMMA3_MODEL_ID for the model id.
 //
 
 import Foundation
 
 public final class GemmaLLMProvider: LLMEnhancer {
-    private let endpoint: URL
+    private let apiKey: String?
+    private let modelId: String
 
-    public init(endpoint: URL) {
-        self.endpoint = endpoint
+    public init(apiKey: String?, modelId: String) {
+        self.apiKey = apiKey
+        self.modelId = modelId
     }
 
     public func decide(input: LLMDecisionInput) async throws -> LLMDecision {
-        var req = URLRequest(url: endpoint)
+        guard let apiKey = apiKey, !apiKey.isEmpty else {
+            throw AppDomainError.unauthenticatedMissingKey(provider: "Gemma (Google)")
+        }
+
+        let urlStr = "https://generativelanguage.googleapis.com/v1beta/models/\(modelId):generateContent"
+        guard let url = URL(string: urlStr) else { throw NetworkClientError.invalidURL }
+        var req = URLRequest(url: url)
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue(apiKey, forHTTPHeaderField: "X-goog-api-key")
 
-        // This assumes a text completion endpoint that accepts a single prompt
-        let prompt = PromptFactory.decisionPrompt(input: input)
+        let system = PromptFactory.decisionPrompt(input: input)
         let body: [String: Any] = [
-            "prompt": prompt,
-            "temperature": 0.2
+            "generationConfig": [
+                "temperature": 0.2,
+                "responseMimeType": "application/json"
+            ],
+            "contents": [[
+                "role": "user",
+                "parts": [["text": system]]
+            ]]
         ]
         req.httpBody = try JSONSerialization.data(withJSONObject: body, options: [])
 
         let response = try await RateLimitScheduler.shared.schedule(provider: .gemma3, costTokens: estimateTokens(for: input)) {
             try await NetworkClient.shared.send(req)
         }
-        // Assume the service returns { text: "..." }
-        struct Root: Decodable { let text: String }
-        let root = try JSONDecoder().decode(Root.self, from: response.data)
-        let text = root.text
 
+        struct GenText: Decodable { let text: String? }
+        struct Candidate: Decodable { let content: Content }
+        struct Content: Decodable { let parts: [GenText] }
+        struct Root: Decodable { let candidates: [Candidate]? }
+
+        let root = try JSONDecoder().decode(Root.self, from: response.data)
+        let text = root.candidates?.first?.content.parts.first?.text ?? "{}"
         if let decision = try? decodeDecision(from: text) { return decision }
 
-        // Try a single repair pass using the same endpoint
-        let repair = PromptFactory.repairPrompt(from: text)
-        let repairBody: [String: Any] = ["prompt": repair, "temperature": 0.0]
+        // One compact repair attempt
+        let repairPrompt = PromptFactory.repairPrompt(from: text)
+        let repairBody: [String: Any] = [
+            "generationConfig": [
+                "temperature": 0.0,
+                "responseMimeType": "application/json"
+            ],
+            "contents": [[
+                "role": "user",
+                "parts": [["text": repairPrompt]]
+            ]]
+        ]
         req.httpBody = try JSONSerialization.data(withJSONObject: repairBody, options: [])
-        let repaired = try await NetworkClient.shared.send(req)
-        let repairedText = (try? JSONDecoder().decode(Root.self, from: repaired.data).text) ?? "{}"
+        let repairedResp = try await NetworkClient.shared.send(req)
+        let repairedRoot = try JSONDecoder().decode(Root.self, from: repairedResp.data)
+        let repairedText = repairedRoot.candidates?.first?.content.parts.first?.text ?? "{}"
         if let decision = try? decodeDecision(from: repairedText) { return decision }
         throw AppDomainError.invalidLLMJSON
     }

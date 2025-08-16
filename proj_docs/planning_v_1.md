@@ -187,7 +187,7 @@ graph TD
 - TTL per entry; eviction; monthly vacuum.
 - Acceptance: cache hits ≤300ms; TTL expiry works.
 
-#### Phase 5 — Providers (adapters)
+#### Phase 5 — Providers (adapters) (⚠️ test required)
 - `GoogleTranslationProvider`: detect EN/ES/ZH/HI/AR → FA; candidates list; quotas surfaced.
 - `GemmaLLMProvider`: configurable endpoint (Groq/Google/other) with model id `gemma-3-12b` by default.
 - `GeminiLLMProvider`: AI Studio `gemini-2.5-flash-lite`.

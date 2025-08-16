@@ -79,6 +79,9 @@ public final class RateLimitScheduler: @unchecked Sendable {
         } catch NetworkClientError.timeout {
             try await backoff(provider: provider, hints: RateLimitHints(retryAfterSeconds: nil, limitRequests: nil, remainingRequests: nil, resetRequestsSeconds: nil, limitTokens: nil, remainingTokens: nil, resetTokensSeconds: nil))
             throw AppDomainError.timeout
+        } catch NetworkClientError.offline {
+            // Do not backoff or trip circuit for offline; surface cleanly to UI
+            throw AppDomainError.offline
         } catch {
             registerFailure(provider: provider)
             throw error

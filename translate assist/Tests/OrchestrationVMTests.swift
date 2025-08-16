@@ -10,7 +10,7 @@ final class OrchestrationVMTests: XCTestCase {
         let gl = FakeGlossaryProvider()
         let metrics = FakeMetricsProvider()
         let svc = TranslationService(translationProvider: tp, llmEnhancer: llm, examplesProvider: ex, glossary: gl, metrics: metrics)
-        let vm = OrchestrationVM(service: svc)
+        let vm = await MainActor.run { OrchestrationVM(service: svc) }
         await MainActor.run {
             vm.start(term: "Hello, world!", src: "en", dst: "fa", context: nil, persona: nil, domainPriority: ["AI/CS"]) 
         }
@@ -28,12 +28,12 @@ final class OrchestrationVMTests: XCTestCase {
         let gl = FakeGlossaryProvider()
         let metrics = FakeMetricsProvider()
         let svc = TranslationService(translationProvider: tp, llmEnhancer: llm, examplesProvider: ex, glossary: gl, metrics: metrics)
-        let vm = OrchestrationVM(service: svc)
+        let vm = await MainActor.run { OrchestrationVM(service: svc) }
         await MainActor.run {
             vm.start(term: "Hello, world!", src: "en", dst: "fa", context: nil, persona: nil, domainPriority: ["AI/CS"]) 
             vm.cancel()
         }
-        XCTAssertFalse(vm.isTranslating)
+        await MainActor.run { XCTAssertFalse(vm.isTranslating) }
     }
 }
 #endif

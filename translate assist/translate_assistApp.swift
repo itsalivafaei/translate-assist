@@ -540,6 +540,14 @@ private struct MenubarPopoverView: View {
 
                 Spacer()
 
+                if let banner = vm.banner, !banner.isEmpty {
+                    Button("Retry") {
+                        rerunIfPossible()
+                    }
+                    .controlSize(.small)
+                    .accessibilityLabel("Retry translation")
+                }
+
                 Button("Save") { saveCurrentToTermbank() }
                     .disabled(vm.chosenText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 Button("Clear") { inputText.removeAll() }

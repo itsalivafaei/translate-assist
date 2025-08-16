@@ -1,19 +1,24 @@
 {
-  "configurations": [
+  "configurations" : [
     {
-      "name": "Default",
-      "options": { }
-    }
-  ],
-  "defaultOptions": { },
-  "testTargets": [
-    {
-      "target": {
-        "containerPath": "container:translate assist.xcodeproj",
-        "identifier": "4115C0A32E4A000000B267AD",
-        "name": "translate assistTests"
+      "id" : "6A53567B-154F-43E7-9B12-A90FF39099C5",
+      "name" : "Default",
+      "options" : {
+
       }
     }
   ],
-  "version": 1
+  "defaultOptions" : {
+
+  },
+  "testTargets" : [
+    {
+      "target" : {
+        "containerPath" : "container:translate assist.xcodeproj",
+        "identifier" : "4115C0A32E4A000000B267AD",
+        "name" : "translate assistTests"
+      }
+    }
+  ],
+  "version" : 1
 }

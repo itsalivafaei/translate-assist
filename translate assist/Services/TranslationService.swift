@@ -100,11 +100,78 @@ public final class TranslationService {
                         decision = try await llmEnhancer.decide(input: decisionInput)
                     } catch let err as AppDomainError {
                         signposter.endInterval("stage.llm", decisionSpan)
+                        // Degrade gracefully to MT-only immediately
                         continuation.yield(.banner(err.bannerMessage))
-                        let outcome = self.makeOutcome(term: trimmed, src: effectiveSrc, dst: dst, context: context, mt: mt, decision: nil)
-                        continuation.yield(.final(outcome))
+                        let fallbackOutcome = self.makeOutcome(term: trimmed, src: effectiveSrc, dst: dst, context: context, mt: mt, decision: nil)
+                        continuation.yield(.final(fallbackOutcome))
                         metrics.track(event: "llm_fallback", value: nil)
-                        continuation.finish()
+
+                        // Auto-recover: for rate-limit or open circuit, schedule one retry after cooldown
+                        let shouldAutoRetry: Bool
+                        let waitSeconds: Int
+                        switch err {
+                        case .rateLimited(let retryAfterSeconds):
+                            shouldAutoRetry = true
+                            waitSeconds = max(1, retryAfterSeconds ?? 2)
+                        case .circuitOpen(_, let cooldownMs):
+                            shouldAutoRetry = true
+                            waitSeconds = max(1, cooldownMs / 1000)
+                        case .serverUnavailable:
+                            shouldAutoRetry = true
+                            waitSeconds = 2
+                        case .timeout:
+                            shouldAutoRetry = true
+                            waitSeconds = 2
+                        default:
+                            shouldAutoRetry = false
+                            waitSeconds = 0
+                        }
+
+                        if shouldAutoRetry {
+                            // Inform user about planned retry
+                            continuation.yield(.banner("Retrying LLM shortly…"))
+                            let retryInput = decisionInput
+                            // Schedule a single retry. If cancelled (popover closed), do nothing.
+                            Task.detached { [weak self] in
+                                guard let self = self else { return }
+                                do {
+                                    try await Task.sleep(nanoseconds: UInt64(max(1, waitSeconds) * 1_000_000_000))
+                                    if Task.isCancelled { return }
+                                    // Attempt decision again
+                                    let retryDecision = try await self.llmEnhancer.decide(input: retryInput)
+                                    if Task.isCancelled { return }
+                                    // Yield improved decision and outcome
+                                    continuation.yield(.decision(retryDecision))
+                                    let improved = self.makeOutcome(term: trimmed, src: effectiveSrc, dst: dst, context: context, mt: mt, decision: retryDecision)
+                                    continuation.yield(.final(improved))
+                                    self.metrics.track(event: "llm_auto_recover_ok", value: retryDecision.confidence)
+                                } catch is CancellationError {
+                                    // Swallow
+                                } catch let e as AppDomainError {
+                                    // Still failing; keep MT-only result
+                                    continuation.yield(.banner(e.bannerMessage))
+                                    self.metrics.track(event: "llm_auto_recover_fail", value: nil)
+                                } catch {
+                                    continuation.yield(.banner(AppDomainError.unknown(message: error.localizedDescription).bannerMessage))
+                                    self.metrics.track(event: "llm_auto_recover_fail", value: nil)
+                                }
+                                // After auto-retry attempt (success or fail), proceed to examples and finish
+                                let exSpan = self.signposter.beginInterval("stage.examples", id: .exclusive)
+                                let examples = (try? await self.examplesProvider.search(term: trimmed, src: effectiveSrc, dst: dst, context: context)) ?? []
+                                continuation.yield(.examples(examples))
+                                self.signposter.endInterval("stage.examples", exSpan)
+                                continuation.finish()
+                            }
+                        } else {
+                            // Non-retriable error: proceed to examples and finish
+                            Task.detached {
+                                let exSpan = self.signposter.beginInterval("stage.examples", id: .exclusive)
+                                let examples = (try? await self.examplesProvider.search(term: trimmed, src: effectiveSrc, dst: dst, context: context)) ?? []
+                                continuation.yield(.examples(examples))
+                                self.signposter.endInterval("stage.examples", exSpan)
+                                continuation.finish()
+                            }
+                        }
                         return
                     }
 

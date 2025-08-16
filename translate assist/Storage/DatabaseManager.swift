@@ -26,6 +26,8 @@ public final class DatabaseManager {
             try open()
             try enableForeignKeys()
             try Migrations.applyAll(on: self)
+            // Phase 4: Evict expired cache entries at startup
+            try CacheService.evictExpired()
             try runMonthlyVacuumIfNeeded()
         } catch {
             // For Phase 1, fail silently but keep app usable.

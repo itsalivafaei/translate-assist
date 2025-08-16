@@ -181,7 +181,7 @@ graph TD
 - Token-bucket limiter per model; headers-aware backoff; 60s circuit-breaker.
 - Acceptance: synthetic load test shows queueing/backoff; logs include rate-limit snapshots.
 
-#### Phase 4 — Cache services
+#### Phase 4 — Cache services ✅
 - MT cache: key `(term, contextHash, src→fa)`.
 - LLM cache: key `(term, contextHash, personaHash, mtHash)`.
 - TTL per entry; eviction; monthly vacuum.

@@ -43,6 +43,9 @@ public enum Constants {
     // Cache TTLs
     public static let cacheMTTtlSeconds: Int = Env.int("CACHE_MT_TTL_S", default: 86_400) // 24h
     public static let cacheLLMTtlSeconds: Int = Env.int("CACHE_LLM_TTL_S", default: 86_400) // 24h
+
+    // Cache maintenance interval (minutes)
+    public static let cacheMaintenanceIntervalMinutes: Int = Env.int("CACHE_MAINTENANCE_MIN", default: 30)
 }
 
 

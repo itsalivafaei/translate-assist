@@ -9,8 +9,8 @@ import SwiftUI
 
 struct TranslationDrivenPreview: View {
     @StateObject private var vm = TranslationVM(
-        translationProvider: FakeTranslationProvider(),
-        llmEnhancer: FakeLLMEnhancer(),
+        translationProvider: CachedTranslationProvider(wrapped: FakeTranslationProvider()),
+        llmEnhancer: CachedLLMEnhancer(wrapped: FakeLLMEnhancer()),
         glossary: FakeGlossaryProvider(),
         examplesProvider: FakeExamplesProvider(),
         metrics: FakeMetricsProvider()

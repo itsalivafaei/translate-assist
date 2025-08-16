@@ -30,6 +30,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         configureStatusItem()
         configurePopover()
         DatabaseManager.shared.start()
+        // Phase 4: opportunistic cache maintenance on launch
+        try? CacheService.pruneIfOversized(maxEntriesPerTable: 10_000)
+        // Also schedule periodic cleanup on app activation events
+        NotificationCenter.default.addObserver(forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main) { _ in
+            try? CacheService.evictExpired()
+        }
+        // Optional periodic cleanup timer to keep caches healthy in long sessions
+        let interval = max(5, Constants.cacheMaintenanceIntervalMinutes)
+        Timer.scheduledTimer(withTimeInterval: TimeInterval(interval * 60), repeats: true) { _ in
+            try? CacheService.evictExpired()
+            try? CacheService.pruneIfOversized(maxEntriesPerTable: 10_000)
+        }
     }
 
     private func configureStatusItem() {

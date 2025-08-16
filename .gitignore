@@ -17,5 +17,6 @@ translate assist/Secrets.plist
 # Logs
 *.log
 
-# Docs
+# Docs & IDE
 agent_docs/
+.cursor/

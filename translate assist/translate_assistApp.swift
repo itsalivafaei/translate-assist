@@ -23,7 +23,7 @@ struct translate_assistApp: App {
         Settings {
             SettingsView()
         }
-        Commands {
+        .commands {
             CommandGroup(replacing: .appInfo) {
                 Button("About Translate Assist") {
                     NotificationCenter.default.post(name: .openAboutRequested, object: nil)

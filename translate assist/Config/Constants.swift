@@ -46,6 +46,15 @@ public enum Constants {
 
     // Cache maintenance interval (minutes)
     public static let cacheMaintenanceIntervalMinutes: Int = Env.int("CACHE_MAINTENANCE_MIN", default: 30)
+
+    // Feature flag: enforce TTL on cache reads (default disabled in Debug/tests, enabled in Release)
+    public static let cacheEnforceTtlOnReads: Bool = {
+        #if DEBUG
+        return Env.int("CACHE_ENFORCE_TTL_ON_READS", default: 0) == 1
+        #else
+        return Env.int("CACHE_ENFORCE_TTL_ON_READS", default: 1) == 1
+        #endif
+    }()
 }
 
 

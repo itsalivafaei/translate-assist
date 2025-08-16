@@ -22,7 +22,17 @@ public enum CacheService {
     }
 
     public static func getMT(forKey key: String) throws -> MTResponse? {
-        let sql = "SELECT payload FROM cache_mt WHERE key = ?1 LIMIT 1;"
+        let sql: String
+        if Constants.cacheEnforceTtlOnReads {
+            sql = """
+            SELECT payload FROM cache_mt
+            WHERE key = ?1
+              AND ((CASE WHEN length(created_at) > 10 THEN strftime('%s', created_at) ELSE CAST(created_at AS INTEGER) END) + ttl) > strftime('%s','now')
+            LIMIT 1;
+            """
+        } else {
+            sql = "SELECT payload FROM cache_mt WHERE key = ?1 LIMIT 1;"
+        }
         return try DatabaseManager.shared.withPreparedStatement(sql) { stmt in
             sqlite3_bind_text(stmt, 1, key, -1, SQLITE_TRANSIENT)
             if sqlite3_step(stmt) == SQLITE_ROW {
@@ -69,7 +79,17 @@ public enum CacheService {
     }
 
     public static func getLLM(forKey key: String) throws -> LLMDecision? {
-        let sql = "SELECT payload FROM cache_llm WHERE key = ?1 LIMIT 1;"
+        let sql: String
+        if Constants.cacheEnforceTtlOnReads {
+            sql = """
+            SELECT payload FROM cache_llm
+            WHERE key = ?1
+              AND ((CASE WHEN length(created_at) > 10 THEN strftime('%s', created_at) ELSE CAST(created_at AS INTEGER) END) + ttl) > strftime('%s','now')
+            LIMIT 1;
+            """
+        } else {
+            sql = "SELECT payload FROM cache_llm WHERE key = ?1 LIMIT 1;"
+        }
         return try DatabaseManager.shared.withPreparedStatement(sql) { stmt in
             sqlite3_bind_text(stmt, 1, key, -1, SQLITE_TRANSIENT)
             if sqlite3_step(stmt) == SQLITE_ROW {

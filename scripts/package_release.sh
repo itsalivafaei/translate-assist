@@ -119,7 +119,8 @@ fi
 
 echo "[5/6] Notarize DMG"
 if [[ -n "$NOTARY_PROFILE" ]]; then
-  xcrun notarytool submit "$DMG_DIR/$DMG_NAME" --keychain-profile "$NOTARY_PROFILE" --team-id "$TEAM_ID" --wait
+  # Team ID is embedded in the stored notarytool credentials; no need to pass explicitly
+  xcrun notarytool submit "$DMG_DIR/$DMG_NAME" --keychain-profile "$NOTARY_PROFILE" --wait
 elif [[ -n "$APPLE_ID" && -n "$PASSWORD" && -n "$TEAM_ID" ]]; then
   xcrun notarytool submit "$DMG_DIR/$DMG_NAME" --apple-id "$APPLE_ID" --password "$PASSWORD" --team-id "$TEAM_ID" --wait
 else

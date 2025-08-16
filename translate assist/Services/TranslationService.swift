@@ -69,6 +69,9 @@ public final class TranslationService {
                 }
 
                 do {
+                    // Phase 9: record input history (best-effort, non-fatal)
+                    _ = try? InputHistoryDAO.insert(text: trimmed)
+                    try? InputHistoryDAO.prune(maxEntries: 100)
                     // Stage 1: MT (cached wrapper avoids network when possible)
                     let mtSpan = signposter.beginInterval("stage.mt", id: .exclusive)
                     let mt = try await translationProvider.translate(term: trimmed, src: src, dst: dst, context: context)

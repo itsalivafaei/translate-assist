@@ -17,6 +17,10 @@ enum Migrations {
             try v1(on: db)
             try record(version: 1, on: db)
         }
+        if current < 2 {
+            try v2(on: db)
+            try record(version: 2, on: db)
+        }
     }
 
     private static func currentVersion(on db: DatabaseManager) throws -> Int {
@@ -125,6 +129,18 @@ enum Migrations {
             created_at TEXT NOT NULL DEFAULT (STRFTIME('%Y-%m-%dT%H:%M:%fZ','now'))
         );
         CREATE INDEX IF NOT EXISTS idx_metrics_event ON metrics(event);
+        """)
+    }
+
+    // Schema v2: input history for last N entries (distinct by text), Phase 9
+    private static func v2(on db: DatabaseManager) throws {
+        try db.execute("""
+        CREATE TABLE IF NOT EXISTS input_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            text TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (STRFTIME('%Y-%m-%dT%H:%M:%fZ','now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_input_history_created ON input_history(created_at DESC);
         """)
     }
 }

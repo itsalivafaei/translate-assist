@@ -41,21 +41,27 @@ public final class RateLimitScheduler: @unchecked Sendable {
                 rpmCapacity: ProviderRateLimits.gemma3.rpm,
                 tpmCapacity: ProviderRateLimits.gemma3.tpm,
                 rpdCapacity: ProviderRateLimits.gemma3.rpd,
-                rpmTokens: 0, tpmTokens: 0, rpdTokens: 0,
+                rpmTokens: Double(ProviderRateLimits.gemma3.rpm),
+                tpmTokens: Double(ProviderRateLimits.gemma3.tpm),
+                rpdTokens: Double(ProviderRateLimits.gemma3.rpd),
                 lastRefill: now, circuitOpenUntil: 0, consecutiveFailures: 0
             ),
             .gemini: Bucket(
                 rpmCapacity: ProviderRateLimits.gemini.rpm,
                 tpmCapacity: ProviderRateLimits.gemini.tpm,
                 rpdCapacity: ProviderRateLimits.gemini.rpd,
-                rpmTokens: 0, tpmTokens: 0, rpdTokens: 0,
+                rpmTokens: Double(ProviderRateLimits.gemini.rpm),
+                tpmTokens: Double(ProviderRateLimits.gemini.tpm),
+                rpdTokens: Double(ProviderRateLimits.gemini.rpd),
                 lastRefill: now, circuitOpenUntil: 0, consecutiveFailures: 0
             ),
             .googleTranslate: Bucket(
                 rpmCapacity: ProviderRateLimits.googleTranslate.rpm,
                 tpmCapacity: ProviderRateLimits.googleTranslate.tpm,
                 rpdCapacity: ProviderRateLimits.googleTranslate.rpd,
-                rpmTokens: 0, tpmTokens: 0, rpdTokens: 0,
+                rpmTokens: Double(ProviderRateLimits.googleTranslate.rpm),
+                tpmTokens: Double(ProviderRateLimits.googleTranslate.tpm),
+                rpdTokens: Double(ProviderRateLimits.googleTranslate.rpd),
                 lastRefill: now, circuitOpenUntil: 0, consecutiveFailures: 0
             )
         ]
@@ -92,9 +98,11 @@ public final class RateLimitScheduler: @unchecked Sendable {
                     return
                 }
                 refill(&bucket, now: now)
-                let need = Double(max(1, costTokens))
-                if bucket.rpmTokens >= need && bucket.tpmTokens >= Double(costTokens) {
-                    bucket.rpmTokens -= need
+                // RPM accounts for requests; TPM accounts for character tokens
+                let rpmNeed = 1.0
+                let tpmNeed = Double(max(1, costTokens))
+                if bucket.rpmTokens >= rpmNeed && bucket.tpmTokens >= tpmNeed {
+                    bucket.rpmTokens -= rpmNeed
                     bucket.tpmTokens -= Double(costTokens)
                     self.buckets[provider] = bucket
                     continuation.resume()
@@ -102,8 +110,8 @@ public final class RateLimitScheduler: @unchecked Sendable {
                     // Not enough tokens; compute delay until next refill
                     let rpmPerSec = Double(bucket.rpmCapacity) / 60.0
                     let tpmPerSec = Double(bucket.tpmCapacity) / 60.0
-                    let rpmShortfall = max(0, need - bucket.rpmTokens)
-                    let tpmShortfall = max(0, Double(costTokens) - bucket.tpmTokens)
+                    let rpmShortfall = max(0, rpmNeed - bucket.rpmTokens)
+                    let tpmShortfall = max(0, tpmNeed - bucket.tpmTokens)
                     let delay = max(rpmShortfall / rpmPerSec, tpmShortfall / tpmPerSec)
                     self.logger.debug("Queueing request for \(provider.rawValue); delay ~\(String(format: "%.2f", delay))s")
                     self.queue.asyncAfter(deadline: .now() + delay) { [self] in

@@ -1,18 +1,19 @@
 {
-  "configurations" : [
+  "configurations": [
     {
-      "id" : "EBD883FD-0BE5-4BD8-B5B2-517DBBA875E3",
-      "name" : "Configuration 1",
-      "options" : {
-
+      "name": "Default",
+      "options": { }
+    }
+  ],
+  "defaultOptions": { },
+  "testTargets": [
+    {
+      "target": {
+        "containerPath": "container:translate assist.xcodeproj",
+        "identifier": "4115C0A32E4A000000B267AD",
+        "name": "translate assistTests"
       }
     }
   ],
-  "defaultOptions" : {
-
-  },
-  "testTargets" : [
-
-  ],
-  "version" : 1
+  "version": 1
 }

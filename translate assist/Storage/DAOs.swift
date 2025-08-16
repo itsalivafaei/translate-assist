@@ -44,6 +44,40 @@ public enum TermDAO {
             return results
         }
     }
+
+    public static func fetchById(_ id: Int64) throws -> Term? {
+        let sql = "SELECT id, src, dst, lemma, created_at FROM term WHERE id = ?1 LIMIT 1;"
+        return try DatabaseManager.shared.withPreparedStatement(sql) { stmt in
+            sqlite3_bind_int64(stmt, 1, id)
+            if sqlite3_step(stmt) == SQLITE_ROW {
+                let id = sqlite3_column_int64(stmt, 0)
+                let src = String(cString: sqlite3_column_text(stmt, 1))
+                let dst = String(cString: sqlite3_column_text(stmt, 2))
+                let lemma = String(cString: sqlite3_column_text(stmt, 3))
+                let created = String(cString: sqlite3_column_text(stmt, 4))
+                return Term(id: id, src: src, dst: dst, lemma: lemma, createdAtIso: created)
+            }
+            return nil
+        }
+    }
+
+    public static func recent(limit: Int = 10, offset: Int = 0) throws -> [Term] {
+        let limit = max(0, min(limit, 500))
+        let offset = max(0, offset)
+        let sql = "SELECT id, src, dst, lemma, created_at FROM term ORDER BY id DESC LIMIT \(limit) OFFSET \(offset);"
+        return try DatabaseManager.shared.withPreparedStatement(sql) { stmt in
+            var results: [Term] = []
+            while sqlite3_step(stmt) == SQLITE_ROW {
+                let id = sqlite3_column_int64(stmt, 0)
+                let src = String(cString: sqlite3_column_text(stmt, 1))
+                let dst = String(cString: sqlite3_column_text(stmt, 2))
+                let lemma = String(cString: sqlite3_column_text(stmt, 3))
+                let created = String(cString: sqlite3_column_text(stmt, 4))
+                results.append(Term(id: id, src: src, dst: dst, lemma: lemma, createdAtIso: created))
+            }
+            return results
+        }
+    }
 }
 
 public enum SenseDAO {
@@ -180,12 +214,72 @@ public enum ReviewLogDAO {
             return results
         }
     }
+
+    public static func latestForTerm(_ termId: Int64) throws -> ReviewLog? {
+        let sql = "SELECT id, term_id, due_at, ease, interval, success, created_at FROM review_log WHERE term_id = ?1 ORDER BY id DESC LIMIT 1;"
+        return try DatabaseManager.shared.withPreparedStatement(sql) { stmt in
+            sqlite3_bind_int64(stmt, 1, termId)
+            if sqlite3_step(stmt) == SQLITE_ROW {
+                let id = sqlite3_column_int64(stmt, 0)
+                let termId = sqlite3_column_int64(stmt, 1)
+                let dueAt = String(cString: sqlite3_column_text(stmt, 2))
+                let ease = Double(sqlite3_column_double(stmt, 3))
+                let intervalDays = Int(sqlite3_column_int(stmt, 4))
+                let success = sqlite3_column_int(stmt, 5) != 0
+                let created = String(cString: sqlite3_column_text(stmt, 6))
+                return ReviewLog(id: id, termId: termId, dueAtIso: dueAt, ease: ease, intervalDays: intervalDays, success: success, createdAtIso: created)
+            }
+            return nil
+        }
+    }
 }
 
 // MARK: - Helpers
 
 private func bindOptionalText(_ stmt: OpaquePointer, _ index: Int32, _ value: String?) {
     if let value { sqlite3_bind_text(stmt, index, value, -1, SQLITE_TRANSIENT) } else { sqlite3_bind_null(stmt, index) }
+}
+
+// MARK: - Input history DAO (Phase 9)
+
+public enum InputHistoryDAO {
+    @discardableResult
+    public static func insert(text: String) throws -> Int64 {
+        let value = try sanitizeNonEmptyText(field: "text", value: text, maxLen: FieldLimits.text)
+        let sql = "INSERT INTO input_history(text) VALUES(?1);"
+        var newId: Int64 = 0
+        try DatabaseManager.shared.withPreparedStatement(sql) { stmt in
+            sqlite3_bind_text(stmt, 1, value, -1, SQLITE_TRANSIENT)
+            guard sqlite3_step(stmt) == SQLITE_DONE else { throw DatabaseError.execute(message: "insert input_history failed") }
+            newId = sqlite3_last_insert_rowid(sqlite3_db_handle(stmt))
+        }
+        return newId
+    }
+
+    public static func recent(limit: Int = 5) throws -> [String] {
+        let limit = max(0, min(limit, 50))
+        let sql = "SELECT text FROM input_history ORDER BY id DESC LIMIT \(limit);"
+        return try DatabaseManager.shared.withPreparedStatement(sql) { stmt in
+            var results: [String] = []
+            while sqlite3_step(stmt) == SQLITE_ROW {
+                if let cstr = sqlite3_column_text(stmt, 0) {
+                    results.append(String(cString: cstr))
+                }
+            }
+            return results
+        }
+    }
+
+    public static func prune(maxEntries: Int = 100) throws {
+        guard maxEntries > 0 else { return }
+        // Delete older rows beyond maxEntries by id order
+        try DatabaseManager.shared.execute("""
+        DELETE FROM input_history WHERE id IN (
+            SELECT id FROM input_history ORDER BY id DESC LIMIT -1 OFFSET \(maxEntries)
+        );
+        """
+        )
+    }
 }
 
 

@@ -194,18 +194,18 @@ graph TD
 - PromptFactory; strict JSON; validator + one repair; fallback to MT-only on failure.
 - Acceptance: happy-path MT+LLM within budgets; invalid JSON → repair once → else fallback + banner.
 
-#### Phase 6 — Orchestration services
+#### Phase 6 — Orchestration services ✅
 - `TranslationService`: MT → rerank → optional rewrite → explain → examples; cancellable; stream MT first.
 - `ExamplesService`: Tatoeba/Wiktionary fetch-on-demand with provenance labels; cached.
 - `CSVExportService`, `GlossaryProvider` (stub initially, bias rerank when hit).
 - Acceptance: MT ≤800ms P95; LLM polish ≤400ms after MT P95.
 
-#### Phase 7 — Menubar shell & hotkey
+#### Phase 7 — Menubar shell & hotkey ✅
 - `NSStatusItem` + `NSPopover` hosting SwiftUI root; global hotkey `Ctrl+T` / `Ctrl+Shift+T`.
 - RTL layout and accessibility labels; cancel in-flight on close.
 - Acceptance: hotkey focuses input; accessibility reads header controls.
 
-#### Phase 8 — Popover UI & interactions
+#### Phase 8 — Popover UI & interactions ✅
 - Header: term, IPA (dim), POS, copy; audio controls hidden in MVP.
 - Primary card: FA translation, domain badge, confidence dot.
 - Alternatives: collapsed list.
@@ -214,7 +214,7 @@ graph TD
 - Save to termbank; inline banners (offline, rate-limit, JSON invalid, glossary conflict).
 - Acceptance: toggles trigger cached LLM updates ≤400ms P95; banners display appropriately.
 
-#### Phase 9 — Termbank, SRS, history, export
+#### Phase 9 — Termbank, SRS, history, export ✅
 - Save current sense; last 5 input history.
 - Light SRS: ≤10 daily review items.
 - CSV/JSONL export with headers.

@@ -12,6 +12,7 @@ import SQLite3
 import OSLog
 import Carbon.HIToolbox
 import Combine
+import UniformTypeIdentifiers
 
 @main
 struct translate_assistApp: App {
@@ -27,6 +28,7 @@ struct translate_assistApp: App {
 // MARK: - SwiftUI Settings
 private struct SettingsView: View {
     @State private var selection: HotkeyOption = HotkeyOption.current()
+    @State private var showingImport = false
 
     var body: some View {
         Form {
@@ -39,10 +41,52 @@ private struct SettingsView: View {
                 UserDefaults.standard.set(newValue.rawValue, forKey: HotkeyOption.userDefaultsKey)
                 NotificationCenter.default.post(name: .hotkeyPreferenceDidChange, object: nil)
             }
+
+            Divider()
+            Text("Import/Export")
+                .font(.headline)
+            HStack(spacing: 12) {
+                Button("Import Termbank JSONL…") { importTermbankJSONL() }
+                Button("Import Senses CSV…") { importSensesCSV() }
+            }
         }
         .padding(20)
         .frame(width: 360)
         .onAppear { selection = HotkeyOption.current() }
+    }
+
+    private func importTermbankJSONL() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.json]
+        panel.canChooseFiles = true
+        panel.allowsMultipleSelection = false
+        panel.begin { response in
+            if response == .OK, let url = panel.url {
+                do {
+                    try ImportService.importTermbankJSONL(from: url)
+                    BannerCenter.shared.show(message: "Imported termbank.jsonl")
+                } catch {
+                    BannerCenter.shared.show(message: "Import failed: \(error.localizedDescription)")
+                }
+            }
+        }
+    }
+
+    private func importSensesCSV() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.commaSeparatedText]
+        panel.canChooseFiles = true
+        panel.allowsMultipleSelection = false
+        panel.begin { response in
+            if response == .OK, let url = panel.url {
+                do {
+                    try ImportService.importSensesCSV(from: url, termIdMapper: { Int64($0) })
+                    BannerCenter.shared.show(message: "Imported senses.csv")
+                } catch {
+                    BannerCenter.shared.show(message: "Import failed: \(error.localizedDescription)")
+                }
+            }
+        }
     }
 }
 
@@ -68,6 +112,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         OrchestrationVM(service: translationService)
     }()
     private let logger = Logger(subsystem: "com.klewrsolutions.translate-assist", category: "menubar")
+    private let termbank = TermbankService()
+    private let srs = SRSService()
 
     // Global hotkey state
     private var hotKeyRefCtrlT: EventHotKeyRef?
@@ -142,7 +188,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func configurePopover() {
         popover.behavior = .transient
         popover.contentSize = NSSize(width: Constants.popoverWidth, height: Constants.popoverHeight)
-        popover.contentViewController = NSHostingController(rootView: MenubarPopoverView(translationService: translationService, orchestrationVM: orchestrationVM))
+        popover.contentViewController = NSHostingController(rootView: MenubarPopoverView(translationService: translationService, orchestrationVM: orchestrationVM, termbank: termbank, srs: srs))
         popover.delegate = self
     }
 
@@ -175,6 +221,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         menu.addItem(NSMenuItem.separator())
 
+        let exportCSV = NSMenuItem(title: "Export Senses (CSV)…", action: #selector(exportSensesCSV), keyEquivalent: "")
+        exportCSV.target = self
+        menu.addItem(exportCSV)
+
+        let exportJSONL = NSMenuItem(title: "Export Termbank (JSONL)…", action: #selector(exportTermbankJSONL), keyEquivalent: "")
+        exportJSONL.target = self
+        menu.addItem(exportJSONL)
+
+        let exportTerms = NSMenuItem(title: "Export Terms (CSV)…", action: #selector(exportTermsCSV), keyEquivalent: "")
+        exportTerms.target = self
+        menu.addItem(exportTerms)
+
+        let exportExamples = NSMenuItem(title: "Export Examples (CSV)…", action: #selector(exportExamplesCSV), keyEquivalent: "")
+        exportExamples.target = self
+        menu.addItem(exportExamples)
+
         let quit = NSMenuItem(title: "Quit", action: #selector(quitApp), keyEquivalent: "q")
         quit.target = self
         menu.addItem(quit)
@@ -192,6 +254,71 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             try? await Task.sleep(nanoseconds: 50_000_000)
             NotificationCenter.default.post(name: .menubarServicePayload, object: text)
             NotificationCenter.default.post(name: .menubarPopoverShouldFocusInput, object: nil)
+        }
+    }
+
+    // MARK: - Export handlers (Phase 9)
+    @objc private func exportSensesCSV() {
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.commaSeparatedText]
+        panel.nameFieldStringValue = "senses.csv"
+        panel.begin { response in
+            if response == .OK, let url = panel.url {
+                do {
+                    try CSVExportService.exportSensesCSV(to: url)
+                    BannerCenter.shared.show(message: "Exported senses.csv")
+                } catch {
+                    BannerCenter.shared.show(message: "Export failed: \(error.localizedDescription)")
+                }
+            }
+        }
+    }
+
+    @objc private func exportTermbankJSONL() {
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.json]
+        panel.nameFieldStringValue = "termbank.jsonl"
+        panel.begin { response in
+            if response == .OK, let url = panel.url {
+                do {
+                    try JSONLExportService.exportTermbankJSONL(to: url)
+                    BannerCenter.shared.show(message: "Exported termbank.jsonl")
+                } catch {
+                    BannerCenter.shared.show(message: "Export failed: \(error.localizedDescription)")
+                }
+            }
+        }
+    }
+
+    @objc private func exportTermsCSV() {
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.commaSeparatedText]
+        panel.nameFieldStringValue = "terms.csv"
+        panel.begin { response in
+            if response == .OK, let url = panel.url {
+                do {
+                    try CSVExportService.exportTermsCSV(to: url)
+                    BannerCenter.shared.show(message: "Exported terms.csv")
+                } catch {
+                    BannerCenter.shared.show(message: "Export failed: \(error.localizedDescription)")
+                }
+            }
+        }
+    }
+
+    @objc private func exportExamplesCSV() {
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.commaSeparatedText]
+        panel.nameFieldStringValue = "examples.csv"
+        panel.begin { response in
+            if response == .OK, let url = panel.url {
+                do {
+                    try CSVExportService.exportExamplesCSV(to: url)
+                    BannerCenter.shared.show(message: "Exported examples.csv")
+                } catch {
+                    BannerCenter.shared.show(message: "Export failed: \(error.localizedDescription)")
+                }
+            }
         }
     }
 
@@ -340,10 +467,14 @@ private struct MenubarPopoverView: View {
     @State private var domainBusiness: Bool = false
     private let translationService: TranslationService
     @ObservedObject private var vm: OrchestrationVM
+    private let termbank: TermbankService
+    private let srs: SRSService
 
-    init(translationService: TranslationService, orchestrationVM: OrchestrationVM) {
+    init(translationService: TranslationService, orchestrationVM: OrchestrationVM, termbank: TermbankService, srs: SRSService) {
         self.translationService = translationService
         self.vm = orchestrationVM
+        self.termbank = termbank
+        self.srs = srs
     }
 
     var body: some View {
@@ -409,6 +540,8 @@ private struct MenubarPopoverView: View {
 
                 Spacer()
 
+                Button("Save") { saveCurrentToTermbank() }
+                    .disabled(vm.chosenText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 Button("Clear") { inputText.removeAll() }
                     .disabled(inputText.isEmpty)
             }
@@ -487,6 +620,11 @@ private struct MenubarPopoverView: View {
                             }
                             .accessibilityLabel("Example sentences")
                         }
+
+                        // Term detail (saved senses/examples)
+                        DisclosureGroup("Term detail") {
+                            TermDetailView(lemma: inputText)
+                        }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
@@ -498,10 +636,33 @@ private struct MenubarPopoverView: View {
                 .font(.footnote)
                 .foregroundStyle(.secondary)
                 .accessibilityLabel("Hotkey: \(HotkeyOption.current().accessibilityLabel)")
+
+            Divider()
+
+            DisclosureGroup("History (last 5)") {
+                HistoryListView { text in
+                    inputText = text
+                    rerunIfPossible()
+                }
+                .frame(maxHeight: 100)
+            }
+
+            DisclosureGroup("Due Reviews") {
+                ReviewsListView { termId, success in
+                    do {
+                        try srs.recordReview(for: termId, success: success)
+                        BannerCenter.shared.show(message: success ? "Marked Done" : "Marked Again")
+                    } catch {
+                        BannerCenter.shared.show(message: "Review failed: \(error.localizedDescription)")
+                    }
+                }
+                .frame(maxHeight: 160)
+            }
         }
         .padding(16)
         .frame(width: Constants.popoverWidth, height: Constants.popoverHeight)
         .onAppear(perform: prefillFromPasteboard)
+        .onAppear(perform: loadRecentHistory)
         .onReceive(NotificationCenter.default.publisher(for: .menubarPopoverShouldFocusInput)) { _ in
             focusInput = true
         }
@@ -549,6 +710,27 @@ private struct MenubarPopoverView: View {
         )
     }
 
+    private func saveCurrentToTermbank() {
+        let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+        let primary = SenseInput(
+            canonical: vm.chosenText,
+            variants: vm.alternatives.first,
+            domain: domainAI ? "AI/CS" : (domainBusiness ? "Business" : nil),
+            notes: nil,
+            style: selectedPersona.personaString,
+            source: "mt+llm",
+            confidence: vm.confidence
+        )
+        do {
+            let termId = try termbank.saveTerm(src: "en", dst: "fa", lemma: text, primarySense: primary, examples: [])
+            try srs.recordReview(for: termId, success: true)
+            BannerCenter.shared.show(message: "Saved to termbank")
+        } catch {
+            BannerCenter.shared.show(message: "Save failed: \(error.localizedDescription)")
+        }
+    }
+
     private func prefillFromPasteboard() {
         let pb = NSPasteboard.general
         if let str = pb.string(forType: .string), !str.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -556,6 +738,13 @@ private struct MenubarPopoverView: View {
             if inputText.isEmpty {
                 inputText = str.trimmingCharacters(in: .whitespacesAndNewlines)
             }
+        }
+    }
+
+    private func loadRecentHistory() {
+        // Non-blocking small read; best-effort
+        if let recent = try? InputHistoryDAO.recent(limit: 1), inputText.isEmpty, let first = recent.first {
+            inputText = first
         }
     }
 
@@ -583,6 +772,119 @@ private struct MenubarPopoverView: View {
         if value >= 0.6 { return .yellow }
         if value >= 0.4 { return .orange }
         return .red
+    }
+}
+
+// MARK: - Phase 9 subviews
+private struct HistoryListView: View {
+    let onSelect: (String) -> Void
+    var body: some View {
+        if let items = try? InputHistoryDAO.recent(limit: 5), !items.isEmpty {
+            VStack(alignment: .leading, spacing: 4) {
+                ForEach(items, id: \.self) { text in
+                    Button(action: { onSelect(text) }) {
+                        Text(text)
+                            .font(.caption)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        } else {
+            Text("No history yet").font(.caption).foregroundStyle(.secondary)
+        }
+    }
+}
+
+private struct ReviewsListView: View {
+    let recordAction: (Int64, Bool) -> Void
+    @State private var items: [ReviewItem] = []
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            if items.isEmpty {
+                Text("No reviews due").font(.caption).foregroundStyle(.secondary)
+            } else {
+                ForEach(items, id: \.termId) { item in
+                    HStack {
+                        Text(item.lemma)
+                            .font(.caption)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                        Spacer()
+                        Button("Again") { recordAction(item.termId, false) }
+                            .controlSize(.mini)
+                        Button("Done") { recordAction(item.termId, true) }
+                            .controlSize(.mini)
+                    }
+                }
+            }
+        }
+        .task { items = (try? loadDueReviewItems()) ?? [] }
+    }
+
+    private struct ReviewItem { let termId: Int64; let lemma: String }
+    private func loadDueReviewItems() throws -> [ReviewItem] {
+        let logs = try SRSService().dueNow(limit: 10)
+        var seen = Set<Int64>()
+        var items: [ReviewItem] = []
+        for log in logs {
+            if seen.contains(log.termId) { continue }
+            seen.insert(log.termId)
+            if let term = try TermDAO.fetchById(log.termId) {
+                items.append(ReviewItem(termId: term.id, lemma: term.lemma))
+            }
+        }
+        return items
+    }
+}
+
+private struct TermDetailView: View {
+    let lemma: String
+    @State private var senses: [Sense] = []
+    @State private var examples: [ExampleSentence] = []
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            if senses.isEmpty && examples.isEmpty {
+                Text("No saved term yet").font(.caption).foregroundStyle(.secondary)
+            } else {
+                if !senses.isEmpty {
+                    Text("Senses").font(.caption).foregroundStyle(.secondary)
+                    ForEach(senses, id: \.id) { s in
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(s.canonical).font(.callout)
+                            HStack(spacing: 6) {
+                                if let d = s.domain { Text(d).font(.caption2).foregroundStyle(.secondary) }
+                                if let st = s.style { Text(st).font(.caption2).foregroundStyle(.secondary) }
+                            }
+                        }
+                        .padding(6)
+                        .background(Color.secondary.opacity(0.08))
+                        .cornerRadius(6)
+                    }
+                }
+                if !examples.isEmpty {
+                    Text("Saved Examples").font(.caption).foregroundStyle(.secondary)
+                    ForEach(examples, id: \.id) { e in
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(e.srcText).font(.footnote)
+                            Text(e.dstText).font(.callout)
+                        }
+                        .padding(6)
+                        .background(Color.secondary.opacity(0.08))
+                        .cornerRadius(6)
+                    }
+                }
+            }
+        }
+        .task { await load() }
+    }
+
+    private func load() async {
+        guard let term = try? TermDAO.fetchByLemma(lemma, limit: 1).first else { return }
+        if let list = try? SenseDAO.fetchForTerm(term.id, limit: 10) { senses = list }
+        if let list = try? ExampleDAO.fetchForTerm(term.id, limit: 10) { examples = list }
     }
 }
 

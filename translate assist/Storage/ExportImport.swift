@@ -34,6 +34,47 @@ public enum CSVExportService {
         try csv.data(using: .utf8)?.write(to: url, options: .atomic)
     }
 
+    public static func exportTermsCSV(to url: URL) throws {
+        let header = ["id","src","dst","lemma","created_at"].joined(separator: ",")
+        var rows: [String] = [header]
+        let sql = "SELECT id, src, dst, lemma, created_at FROM term ORDER BY id ASC;"
+        let csv: String = try DatabaseManager.shared.withPreparedStatement(sql) { stmt in
+            while sqlite3_step(stmt) == SQLITE_ROW {
+                let id = sqlite3_column_int64(stmt, 0)
+                let src = String(cString: sqlite3_column_text(stmt, 1))
+                let dst = String(cString: sqlite3_column_text(stmt, 2))
+                let lemma = String(cString: sqlite3_column_text(stmt, 3))
+                let created = String(cString: sqlite3_column_text(stmt, 4))
+                rows.append([
+                    String(id), src, dst, lemma, created
+                ].map { escapeCsv($0) }.joined(separator: ","))
+            }
+            return rows.joined(separator: "\n")
+        }
+        try csv.data(using: .utf8)?.write(to: url, options: .atomic)
+    }
+
+    public static func exportExamplesCSV(to url: URL) throws {
+        let header = ["id","term_id","src_text","dst_text","provenance","created_at"].joined(separator: ",")
+        var rows: [String] = [header]
+        let sql = "SELECT id, term_id, src_text, dst_text, provenance, created_at FROM example ORDER BY id ASC;"
+        let csv: String = try DatabaseManager.shared.withPreparedStatement(sql) { stmt in
+            while sqlite3_step(stmt) == SQLITE_ROW {
+                let id = sqlite3_column_int64(stmt, 0)
+                let termId = sqlite3_column_int64(stmt, 1)
+                let srcText = String(cString: sqlite3_column_text(stmt, 2))
+                let dstText = String(cString: sqlite3_column_text(stmt, 3))
+                let provenance = sqlite3_column_text(stmt, 4).flatMap { String(cString: $0) } ?? ""
+                let created = String(cString: sqlite3_column_text(stmt, 5))
+                rows.append([
+                    String(id), String(termId), srcText, dstText, provenance, created
+                ].map { escapeCsv($0) }.joined(separator: ","))
+            }
+            return rows.joined(separator: "\n")
+        }
+        try csv.data(using: .utf8)?.write(to: url, options: .atomic)
+    }
+
     private static func escapeCsv(_ value: String) -> String {
         if value.contains(",") || value.contains("\n") || value.contains("\"") {
             let escaped = value.replacingOccurrences(of: "\"", with: "\"\"")

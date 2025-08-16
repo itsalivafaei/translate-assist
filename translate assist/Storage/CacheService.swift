@@ -22,7 +22,7 @@ public enum CacheService {
     }
 
     public static func getMT(forKey key: String) throws -> MTResponse? {
-        let sql = "SELECT payload FROM cache_mt WHERE key = ?1 AND (strftime('%s', created_at) + ttl) > strftime('%s','now') LIMIT 1;"
+        let sql = "SELECT payload FROM cache_mt WHERE key = ?1 LIMIT 1;"
         return try DatabaseManager.shared.withPreparedStatement(sql) { stmt in
             sqlite3_bind_text(stmt, 1, key, -1, SQLITE_TRANSIENT)
             if sqlite3_step(stmt) == SQLITE_ROW {
@@ -41,11 +41,11 @@ public enum CacheService {
         let data = try encoder.encode(value)
         let json = String(decoding: data, as: UTF8.self)
         let sql = """
-        INSERT INTO cache_mt(key, payload, ttl) VALUES(?1, ?2, ?3)
+        INSERT INTO cache_mt(key, payload, ttl, created_at) VALUES(?1, ?2, ?3, STRFTIME('%s','now'))
         ON CONFLICT(key) DO UPDATE SET
             payload = excluded.payload,
             ttl = excluded.ttl,
-            created_at = STRFTIME('%Y-%m-%dT%H:%M:%fZ','now');
+            created_at = STRFTIME('%s','now');
         """
         try DatabaseManager.shared.withPreparedStatement(sql) { stmt in
             sqlite3_bind_text(stmt, 1, key, -1, SQLITE_TRANSIENT)
@@ -69,7 +69,7 @@ public enum CacheService {
     }
 
     public static func getLLM(forKey key: String) throws -> LLMDecision? {
-        let sql = "SELECT payload FROM cache_llm WHERE key = ?1 AND (strftime('%s', created_at) + ttl) > strftime('%s','now') LIMIT 1;"
+        let sql = "SELECT payload FROM cache_llm WHERE key = ?1 LIMIT 1;"
         return try DatabaseManager.shared.withPreparedStatement(sql) { stmt in
             sqlite3_bind_text(stmt, 1, key, -1, SQLITE_TRANSIENT)
             if sqlite3_step(stmt) == SQLITE_ROW {
@@ -88,11 +88,11 @@ public enum CacheService {
         let data = try encoder.encode(value)
         let json = String(decoding: data, as: UTF8.self)
         let sql = """
-        INSERT INTO cache_llm(key, payload, ttl) VALUES(?1, ?2, ?3)
+        INSERT INTO cache_llm(key, payload, ttl, created_at) VALUES(?1, ?2, ?3, STRFTIME('%s','now'))
         ON CONFLICT(key) DO UPDATE SET
             payload = excluded.payload,
             ttl = excluded.ttl,
-            created_at = STRFTIME('%Y-%m-%dT%H:%M:%fZ','now');
+            created_at = STRFTIME('%s','now');
         """
         try DatabaseManager.shared.withPreparedStatement(sql) { stmt in
             sqlite3_bind_text(stmt, 1, key, -1, SQLITE_TRANSIENT)
@@ -105,8 +105,8 @@ public enum CacheService {
     // MARK: - Maintenance
 
     public static func evictExpired() throws {
-        try DatabaseManager.shared.execute("DELETE FROM cache_mt WHERE (strftime('%s', created_at) + ttl) <= strftime('%s','now');")
-        try DatabaseManager.shared.execute("DELETE FROM cache_llm WHERE (strftime('%s', created_at) + ttl) <= strftime('%s','now');")
+        try DatabaseManager.shared.execute("DELETE FROM cache_mt WHERE ((CASE WHEN length(created_at) > 10 THEN strftime('%s', created_at) ELSE CAST(created_at AS INTEGER) END) + ttl) <= strftime('%s','now');")
+        try DatabaseManager.shared.execute("DELETE FROM cache_llm WHERE ((CASE WHEN length(created_at) > 10 THEN strftime('%s', created_at) ELSE CAST(created_at AS INTEGER) END) + ttl) <= strftime('%s','now');")
     }
 
     // Optional helper to cap size by removing oldest beyond a soft limit

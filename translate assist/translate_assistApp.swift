@@ -23,6 +23,17 @@ struct translate_assistApp: App {
         Settings {
             SettingsView()
         }
+        Commands {
+            CommandGroup(replacing: .appInfo) {
+                Button("About Translate Assist") {
+                    NotificationCenter.default.post(name: .openAboutRequested, object: nil)
+                }
+            }
+            CommandGroup(replacing: .appTermination) {
+                Button("Quit Translate Assist") { NSApp.terminate(nil) }
+                    .keyboardShortcut("q")
+            }
+        }
     }
 }
 // MARK: - SwiftUI Settings
@@ -114,6 +125,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let logger = Logger(subsystem: "com.klewrsolutions.translate-assist", category: "menubar")
     private let termbank = TermbankService()
     private let srs = SRSService()
+    private var aboutWindowController: NSWindowController?
 
     // Global hotkey state
     private var hotKeyRefCtrlT: EventHotKeyRef?
@@ -158,6 +170,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             guard let strongSelf = self else { return }
             let incoming = note.object as? String ?? ""
             strongSelf.openPopoverAndEmitPayload(incoming)
+        }
+
+        // About command from the app menu
+        NotificationCenter.default.addObserver(forName: .openAboutRequested, object: nil, queue: .main) { [weak self] _ in
+            self?.openAbout()
         }
     }
 
@@ -330,7 +347,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func openAbout() {
-        NSApp.orderFrontStandardAboutPanel(nil)
+        if let wc = aboutWindowController {
+            wc.showWindow(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            return
+        }
+        let hosting = NSHostingController(rootView: AboutView())
+        let window = NSWindow(contentViewController: hosting)
+        window.styleMask = [.titled, .closable]
+        window.title = "About Translate Assist"
+        window.center()
+        let wc = NSWindowController(window: window)
+        aboutWindowController = wc
+        wc.showWindow(nil)
+        NSApp.activate(ignoringOtherApps: true)
     }
 
     @objc private func quitApp() {
@@ -405,6 +435,7 @@ extension Notification.Name {
     static let menubarPopoverRequestClose = Notification.Name("menubar.popover.requestClose")
     static let menubarServicePayload = Notification.Name("menubar.servicePayload")
     static let menubarServiceTrigger = Notification.Name("menubar.serviceTrigger")
+    static let openAboutRequested = Notification.Name("app.openAboutRequested")
 }
 
 // MARK: - NSPopoverDelegate

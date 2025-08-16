@@ -1,0 +1,54 @@
+name: Release (Build & Notarize)
+
+on:
+  workflow_dispatch:
+    inputs:
+      marketing_version:
+        description: Marketing version (e.g., 1.0.1)
+        required: true
+      build_number:
+        description: Build number (e.g., 2)
+        required: true
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-notarize:
+    runs-on: macos-14
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: '16.4'
+
+      - name: Bump version
+        run: |
+          chmod +x scripts/bump_version.sh
+          scripts/bump_version.sh "${{ github.event.inputs.marketing_version || '1.0.0' }}" "${{ github.event.inputs.build_number || '1' }}"
+
+      - name: Build, Sign, Notarize DMG
+        env:
+          AC_USERNAME: ${{ secrets.AC_USERNAME }}
+          AC_PASSWORD: ${{ secrets.AC_PASSWORD }}
+          TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          chmod +x scripts/package_release.sh
+          scripts/package_release.sh \
+            --scheme "translate assist" \
+            --config Release \
+            --team-id "$TEAM_ID" \
+            --bundle-id com.klewrsolutions.translate-assist \
+            --apple-id "$AC_USERNAME" \
+            --password "$AC_PASSWORD"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: TranslateAssist-dmg
+          path: build/dmg/TranslateAssist.dmg
+
+

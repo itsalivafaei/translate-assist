@@ -135,7 +135,7 @@ public final class RateLimitScheduler: @unchecked Sendable {
         let cap: Double = 8.0
         let jitter: Double = Double.random(in: 0...0.25)
         let retry = hints.retryAfterSeconds.map { Double($0) } ?? min(cap, base * pow(2.0, Double(attempt)) + jitter)
-        logger.warning("Backoff for \(provider.rawValue) attempt=\(attempt) sleep=\(String(format: "%.2f", retry))s")
+        logger.warning("Backoff for \(provider.rawValue) attempt=\(attempt) sleep=\(String(format: "%.2f", retry))s rl_requests=\(hints.remainingRequests ?? -1)/\(hints.limitRequests ?? -1) rl_tokens=\(hints.remainingTokens ?? -1)/\(hints.limitTokens ?? -1) reset_req_s=\(hints.resetRequestsSeconds ?? -1) reset_tok_s=\(hints.resetTokensSeconds ?? -1)")
         try await Task.sleep(nanoseconds: UInt64(retry * 1_000_000_000))
         if attempt >= 3 {
             let cooldown = Double(Constants.circuitBreakerCooldownMs) / 1000.0
@@ -145,7 +145,7 @@ public final class RateLimitScheduler: @unchecked Sendable {
                     self.buckets[provider] = b
                 }
             }
-            logger.error("Circuit opened for \(provider.rawValue) \(cooldown, privacy: .public)s")
+            logger.error("Circuit opened for \(provider.rawValue) cooldown_s=\(cooldown, privacy: .public) rl_requests=\(hints.remainingRequests ?? -1)/\(hints.limitRequests ?? -1) rl_tokens=\(hints.remainingTokens ?? -1)/\(hints.limitTokens ?? -1)")
         }
     }
 

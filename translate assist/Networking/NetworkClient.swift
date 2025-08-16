@@ -65,7 +65,7 @@ public final class NetworkClient {
                 throw NetworkClientError.unknown(message: "Non-HTTP response")
             }
             let hints = parseRateLimitHints(http)
-            logger.debug("⬅️ status=\(http.statusCode) id=\(requestId) retryAfter=\(hints.retryAfterSeconds ?? -1)")
+            logger.debug("⬅️ status=\(http.statusCode) id=\(requestId) retryAfter=\(hints.retryAfterSeconds ?? -1) rl_requests=\(hints.remainingRequests ?? -1)/\(hints.limitRequests ?? -1) rl_tokens=\(hints.remainingTokens ?? -1)/\(hints.limitTokens ?? -1) reset_req_s=\(hints.resetRequestsSeconds ?? -1) reset_tok_s=\(hints.resetTokensSeconds ?? -1)")
             signposter.endInterval("network.request", begin)
             if (200..<300).contains(http.statusCode) {
                 return NetworkResponse(data: data, http: http, requestId: requestId, hints: hints)

@@ -149,14 +149,14 @@ public enum CacheService {
     }
 
     // Build LLM cache key directly from decision input (uses candidates only)
-    public static func makeLLMKeyFromInput(term: String, src: String, dst: String = "fa", context: String?, persona: String?, inputCandidates: [SenseCandidate]) -> String {
+    public static func makeLLMKeyFromInput(term: String, src: String, dst: String = "fa", context: String?, persona: String?, inputCandidates: [SenseCandidate], providerTag: String = "primary") -> String {
         let normalizedTerm = normalizeForKey(term)
         let normalizedSrc = normalizeForKey(src)
         let normalizedDst = normalizeForKey(dst)
         let contextHash = context.map { sha256Hex(of: $0) } ?? "none"
         let personaHash = persona.map { sha256Hex(of: $0) } ?? "none"
         let mtHash = hashCandidates(inputCandidates)
-        let base = "v1|llm|src:\(normalizedSrc)|dst:\(normalizedDst)|term:\(normalizedTerm)|ctx:\(contextHash)|persona:\(personaHash)|mt:\(mtHash)"
+        let base = "v1|llm|src:\(normalizedSrc)|dst:\(normalizedDst)|term:\(normalizedTerm)|ctx:\(contextHash)|persona:\(personaHash)|mt:\(mtHash)|tag:\(providerTag)"
         return sha256Hex(of: base)
     }
 

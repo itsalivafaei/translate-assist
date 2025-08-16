@@ -50,6 +50,23 @@ private struct SettingsView: View {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem?
     private let popover = NSPopover()
+    private let metrics: MetricsProvider = ProvidersBootstrap.makeMetricsProvider()
+    private lazy var translationService: TranslationService = {
+        let tp = ProvidersBootstrap.makeTranslationProvider(metrics: metrics)
+        let llm = ProvidersBootstrap.makeLLMEnhancer(primary: "gemini", metrics: metrics)
+        let ex = ProvidersBootstrap.makeExamplesProvider()
+        let gl = ProvidersBootstrap.makeGlossaryProvider()
+        return TranslationService(
+            translationProvider: tp,
+            llmEnhancer: llm,
+            examplesProvider: ex,
+            glossary: gl,
+            metrics: metrics
+        )
+    }()
+    private lazy var orchestrationVM: OrchestrationVM = {
+        OrchestrationVM(service: translationService)
+    }()
     private let logger = Logger(subsystem: "com.klewrsolutions.translate-assist", category: "menubar")
 
     // Global hotkey state
@@ -125,7 +142,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func configurePopover() {
         popover.behavior = .transient
         popover.contentSize = NSSize(width: Constants.popoverWidth, height: Constants.popoverHeight)
-        popover.contentViewController = NSHostingController(rootView: MenubarPopoverView())
+        popover.contentViewController = NSHostingController(rootView: MenubarPopoverView(translationService: translationService, orchestrationVM: orchestrationVM))
         popover.delegate = self
     }
 
@@ -317,6 +334,13 @@ private struct MenubarPopoverView: View {
     @State private var isTranslating: Bool = false
     @State private var currentTask: Task<Void, Never>? = nil
     @State private var cancellables: Set<AnyCancellable> = []
+    private let translationService: TranslationService
+    @ObservedObject private var vm: OrchestrationVM
+
+    init(translationService: TranslationService, orchestrationVM: OrchestrationVM) {
+        self.translationService = translationService
+        self.vm = orchestrationVM
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -343,14 +367,14 @@ private struct MenubarPopoverView: View {
                 Button {
                     startTranslate()
                 } label: {
-                    if isTranslating {
+                    if vm.isTranslating {
                         ProgressView().controlSize(.small)
                             .accessibilityLabel("Translating…")
                     } else {
                         Text("Translate")
                     }
                 }
-                .disabled(inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isTranslating)
+                .disabled(inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || vm.isTranslating)
                 .keyboardShortcut(.return, modifiers: [])
                 .accessibilityLabel("Translate button")
 
@@ -397,19 +421,9 @@ private struct MenubarPopoverView: View {
     }
 
     private func startTranslate() {
-        isTranslating = true
-        // Phase 7 shell: simulate work and cancellation; real pipeline is Phase 6
-        currentTask?.cancel()
-        currentTask = Task {
-            do {
-                try await Task.sleep(nanoseconds: 300_000_000) // 300ms simulate MT
-                try Task.checkCancellation()
-                try await Task.sleep(nanoseconds: 300_000_000) // 300ms simulate LLM
-            } catch { /* cancelled */ }
-            if !Task.isCancelled {
-                isTranslating = false
-            }
-        }
+        let term = inputText
+        guard !term.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        vm.start(term: term, src: nil, dst: "fa", context: nil, persona: nil, domainPriority: ["AI/CS","Business"])
     }
 
     private func prefillFromPasteboard() {

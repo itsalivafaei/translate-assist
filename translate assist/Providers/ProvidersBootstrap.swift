@@ -24,6 +24,31 @@ public enum ProvidersBootstrap {
         }
         return CachedLLMEnhancer(wrapped: enhancer, metrics: metrics)
     }
+
+    // Raw enhancer without cache decoration (used for escalation so its outputs
+    // do not collide with the primary LLM cache key).
+    public static func makeRawLLMEnhancer(primary: String = "gemini") -> LLMEnhancer {
+        let secrets = SecretsLoader.load()
+        if primary == "gemini" {
+            return GeminiLLMProvider(apiKey: secrets.geminiApiKey, modelId: secrets.geminiModelId)
+        } else {
+            return GemmaLLMProvider(apiKey: secrets.geminiApiKey, modelId: secrets.gemma3ModelId)
+        }
+    }
+
+    public static func makeExamplesProvider() -> ExamplesProvider {
+        // Prefer Tatoeba provider; fallback to fake if needed later
+        return TatoebaExamplesProvider()
+    }
+
+    public static func makeGlossaryProvider() -> GlossaryProvider {
+        // Phase 6 MVP: Use fake glossary; wire real provider later
+        return FakeGlossaryProvider()
+    }
+
+    public static func makeMetricsProvider() -> MetricsProvider {
+        return FakeMetricsProvider()
+    }
 }
 
 

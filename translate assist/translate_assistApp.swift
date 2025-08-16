@@ -384,6 +384,80 @@ private struct MenubarPopoverView: View {
                     .disabled(inputText.isEmpty)
             }
 
+            // Results area (Phase 8: bind VM outputs; basic visuals only)
+            if !vm.chosenText.isEmpty || vm.isTranslating {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 10) {
+                        // Primary chosen translation
+                        if !vm.chosenText.isEmpty {
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text(vm.chosenText)
+                                    .font(.title3)
+                                    .bold()
+                                    .multilineTextAlignment(.leading)
+                                HStack(spacing: 6) {
+                                    Circle()
+                                        .fill(confidenceColor(vm.confidence))
+                                        .frame(width: 8, height: 8)
+                                    Text(String(format: "%.0f%%", vm.confidence * 100))
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                            .padding(10)
+                            .background(.thinMaterial)
+                            .cornerRadius(8)
+                        }
+
+                        // Explanation
+                        if !vm.explanation.isEmpty {
+                            Text(vm.explanation)
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                        }
+
+                        // Alternatives (collapsed)
+                        if !vm.alternatives.isEmpty {
+                            DisclosureGroup("Alternatives") {
+                                VStack(alignment: .leading, spacing: 6) {
+                                    ForEach(vm.alternatives, id: \.self) { alt in
+                                        Text(alt)
+                                            .font(.callout)
+                                            .multilineTextAlignment(.leading)
+                                            .padding(.vertical, 2)
+                                    }
+                                }
+                                .padding(.top, 4)
+                            }
+                        }
+
+                        // Examples
+                        if !vm.examples.isEmpty {
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text("Examples")
+                                    .font(.subheadline)
+                                    .bold()
+                                ForEach(Array(vm.examples.enumerated()), id: \.offset) { _, ex in
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(ex.srcText)
+                                            .font(.footnote)
+                                        Text(ex.dstText)
+                                            .font(.callout)
+                                        Text(ex.provenance)
+                                            .font(.caption2)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    .padding(8)
+                                    .background(Color.secondary.opacity(0.08))
+                                    .cornerRadius(6)
+                                }
+                            }
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+
             Spacer()
 
             Text("Hotkey: \(HotkeyOption.current().displayLabel)")
@@ -417,6 +491,11 @@ private struct MenubarPopoverView: View {
             // Auto-focus on appear for keyboard-driven openings
             DispatchQueue.main.async { focusInput = true }
         }
+        .onChange(of: vm.banner) { _, newValue in
+            if let message = newValue, !message.isEmpty {
+                BannerCenter.shared.show(message: message)
+            }
+        }
         .onExitCommand(perform: closePopover)
     }
 
@@ -438,6 +517,13 @@ private struct MenubarPopoverView: View {
 
     private func closePopover() {
         NotificationCenter.default.post(name: .menubarPopoverRequestClose, object: nil)
+    }
+
+    private func confidenceColor(_ value: Double) -> Color {
+        if value >= 0.8 { return .green }
+        if value >= 0.6 { return .yellow }
+        if value >= 0.4 { return .orange }
+        return .red
     }
 }
 
